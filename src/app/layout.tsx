@@ -2,9 +2,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-// --- NUEVO: IMPORTACIÓN DEL PROVEEDOR DE CONTEXTO (TFG: Inyección de Estado Global) ---
-// Importamos el AuthProvider para que toda la aplicación tenga acceso al estado del JWT.
+
+// --- NUEVO: IMPORTACIONES DE ESTRUCTURA GLOBAL (TFG: Patrón de Layouts) ---
 import { AuthProvider } from "@/context/AuthContext";
+import Footer from "@/components/Footer"; // Importamos el footer que acabamos de crear
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +17,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Puedes aprovechar para personalizar los metadatos de tu proyecto aquí mismo
 export const metadata: Metadata = {
   title: "CaterChef Fusión",
   description:
@@ -30,15 +30,21 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="es" // Cambiado a español para adaptarlo a tu público de Madrid
+      lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* --- NUEVO: ENVOLTORIO DE AUTENTICACIÓN (TFG: Patrón Provider) --- */}
-        {/* Al envolver {children} dentro de AuthProvider, cualquier página o componente 
-            interno de la app (como la carta o las reservas) podrá usar el hook 'useAuth()' */}
-        <AuthProvider>{children}</AuthProvider>
-        {/* ------------------------------------------------------------------- */}
+        {/* --- PROVEEDOR DE ESTADO GLOBAL --- */}
+        <AuthProvider>
+          {/* El contenido de cada página (la carta, los chefs, etc.) */}
+          {children}
+
+          {/* --- NUEVO: FOOTER GLOBAL --- */}
+          {/* Al estar fuera de {children} pero dentro de AuthProvider, 
+              se renderiza en todas las rutas de forma persistente. */}
+          <Footer />
+          {/* ----------------------------------------------------------- */}
+        </AuthProvider>
       </body>
     </html>
   );
