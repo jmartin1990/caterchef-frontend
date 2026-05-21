@@ -80,7 +80,7 @@ export default function MisCompras() {
                 <div className="space-y-2 mt-4 flex-1 text-sm">
                   <div className="flex justify-between border-b border-slate-50 pb-2">
                     <span className="text-slate-400">Entrega</span>
-                    <span className="text-slate-700 font-medium text-right max-w-[150px] truncate">
+                    <span className="text-slate-700 font-medium text-right max-w-37.5 truncate">
                       {p.direccion_calle}
                     </span>
                   </div>
