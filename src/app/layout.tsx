@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-// --- NUEVO: IMPORTACIONES DE ESTRUCTURA GLOBAL (TFG: Patrón de Layouts) ---
+// --- ACTUALIZADO: IMPORTACIONES DE ESTRUCTURA GLOBAL (TFG: Patrón de Layouts y Composición) ---
+// Importamos el AuthProvider, el Navbar y el Footer para definir el marco envolvente persistente de la app.
 import { AuthProvider } from "@/context/AuthContext";
-import Footer from "@/components/Footer"; // Importamos el footer que acabamos de crear
+import Navbar from "@/components/Navbar"; // <-- NUEVO: Importación del componente de navegación interactiva
+import Footer from "@/components/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,16 +36,22 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* --- PROVEEDOR DE ESTADO GLOBAL --- */}
+        {/* --- PROVEEDOR DE ESTADO GLOBAL (JWT) --- */}
         <AuthProvider>
-          {/* El contenido de cada página (la carta, los chefs, etc.) */}
-          {children}
+          {/* --- NUEVO: NAVBAR GLOBAL --- */}
+          {/* Al posicionarse aquí, la barra de navegación superior estará presente en todas las rutas 
+              y tendrá acceso inmediato al estado de autenticación (useAuth) */}
+          <Navbar />
 
-          {/* --- NUEVO: FOOTER GLOBAL --- */}
-          {/* Al estar fuera de {children} pero dentro de AuthProvider, 
-              se renderiza en todas las rutas de forma persistente. */}
+          {/* --- NUEVO: CONTENEDOR DE ENRUTAMIENTO DINÁMICO --- */}
+          {/* Envolvemos {children} en una etiqueta semántica 'main' con 'flex-grow'. 
+              Esto asegura que si una vista (ej. Login) tiene poco contenido, el Footer no flote, 
+              sino que sea empujado hacia la parte inferior de la pantalla de forma profesional. */}
+          <main className="flex-grow">{children}</main>
+
+          {/* --- FOOTER GLOBAL --- */}
+          {/* Se mantiene persistente abajo del todo en la jerarquía del DOM */}
           <Footer />
-          {/* ----------------------------------------------------------- */}
         </AuthProvider>
       </body>
     </html>
