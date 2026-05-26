@@ -5,33 +5,80 @@ import { useState, SyntheticEvent } from "react";
 import Link from "next/link";
 
 export default function ReservasPage() {
+  // --- NUEVO: ESTADO DE CONTROL DE CARGA PARA INTERFAZ ---
+  const [cargando, setCargando] = useState(false);
+
   // Estado inicial del formulario.
-  // Nota: Mantenemos el formato CamelCase aquí para que sea compatible con los inputs de React.
+  // Nota: Sincronizamos el valor por defecto de 'tipoChef' con la nueva nomenclatura con nombre de chef.
   const [formData, setFormData] = useState({
     nombre: "",
     email: "",
     fecha: "",
     tipoEvento: "Cena Romántica (Privado)",
-    tipoChef: "Fusión (Perú/España)",
+    tipoChef: "Fusión (Perú/España) - Chef Franklin", // Valor base actualizado
     comensales: "2",
   });
 
+  // --- NUEVO: COMENTARIO TFG (ESTRUCTURA DE TARIFAS Y DATOS DE CHEFS DE CONTROL) ---
+  // Estructura de metadatos estáticos para el cálculo dinámico de costes en el cliente
+  const experienciasCulinarias = [
+    {
+      id: "Tradicional Peruano - Chef Carlos",
+      titulo: "Tradicional Peruano",
+      chef: "Chef Carlos",
+      banderas: "🇵🇪",
+      precioBajo: { min: 50, max: 60 }, // Tarifas para 1-5 comensales
+      precioAlto: { min: 40, max: 50 }, // Tarifas para 6 o más comensales
+    },
+    {
+      id: "Tradicional Español - Chef Laura",
+      titulo: "Tradicional Español",
+      chef: "Chef Laura",
+      banderas: "🇪🇸",
+      precioBajo: { min: 40, max: 50 }, // Tarifas para 1-5 comensales
+      precioAlto: { min: 30, max: 40 }, // Tarifas para 6 o más comensales
+    },
+    {
+      id: "Fusión (Perú/España) - Chef Franklin",
+      titulo: "Fusión (Perú/España)",
+      chef: "Chef Franklin",
+      banderas: "🇵🇪 🇪🇸", // 👈 MODIFICADO: Dos banderas juntas para la fusión
+      precioBajo: { min: 55, max: 65 }, // Tarifas para 1-5 comensales
+      precioAlto: { min: 45, max: 55 }, // Tarifas para 6 o más comensales
+    },
+  ];
+
+  // --- NUEVO: CÁLCULO DINÁMICO DE RANGO DE PRECIO EN CALIENTE ---
+  const numComensales = parseInt(formData.comensales, 10) || 1;
+  const experienciaSeleccionada = experienciasCulinarias.find(
+    (exp) => exp.id === formData.tipoChef,
+  );
+
+  let rangoPrecioActual = "";
+  if (experienciaSeleccionada) {
+    if (numComensales <= 5) {
+      rangoPrecioActual = `${experienciaSeleccionada.precioBajo.min}€ - ${experienciaSeleccionada.precioBajo.max}€`;
+    } else {
+      rangoPrecioActual = `${experienciaSeleccionada.precioAlto.min}€ - ${experienciaSeleccionada.precioAlto.max}€`;
+    }
+  }
+
   // Manejador del envío del formulario.
-  // Usamos SyntheticEvent<HTMLFormElement> como el tipo de evento más compatible y profesional.
   const manejarEnvio = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setCargando(true);
 
     try {
       // --- CORRECCIÓN CRÍTICA: Contrato de API (Mapeo) ---
-      // Aquí traducimos los campos del formulario al formato 'snake_case' que espera tu FastAPI.
-      // Esto elimina el error 422 (Unprocessable Content) que recibimos antes.
+      // Enviamos el valor completo de 'tipoChef' (Ej: "Fusión (Perú/España) - Chef Franklin")
+      // de forma transparente hacia la columna 'tipo_chef' en Neon DB.
       const payload = {
         nombre: formData.nombre,
         email: formData.email,
         fecha: formData.fecha,
-        tipo_evento: formData.tipoEvento, // Backend espera: tipo_evento
-        tipo_chef: formData.tipoChef, // Backend espera: tipo_chef
-        comensales: parseInt(formData.comensales, 10), // Conversión necesaria para la BBDD
+        tipo_evento: formData.tipoEvento,
+        tipo_chef: formData.tipoChef,
+        comensales: parseInt(formData.comensales, 10),
       };
 
       const respuesta = await fetch("http://127.0.0.1:8000/api/reservas", {
@@ -52,7 +99,7 @@ export default function ReservasPage() {
           email: "",
           fecha: "",
           tipoEvento: "Cena Romántica (Privado)",
-          tipoChef: "Fusión (Perú/España)",
+          tipoChef: "Fusión (Perú/España) - Chef Franklin",
           comensales: "2",
         });
       } else {
@@ -61,6 +108,8 @@ export default function ReservasPage() {
     } catch (error) {
       console.error("Error de conexión:", error);
       alert("No se pudo conectar con el servidor.");
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -157,7 +206,7 @@ export default function ReservasPage() {
                 </label>
                 <input
                   type="number"
-                  min="2"
+                  min="1"
                   max="100"
                   required
                   value={formData.comensales}
@@ -171,42 +220,57 @@ export default function ReservasPage() {
 
             {/* Selección de Chef */}
             <div className="pt-4">
-              <label className="block text-lg font-black text-slate-900 mb-4">
-                ¿Qué experiencia culinaria buscas?
-              </label>
+              {/* --- ACTUALIZADO: Cabecera con indicación de precio estimado dinámico por persona --- */}
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
+                <label className="block text-lg font-black text-slate-900">
+                  ¿Qué experiencia culinaria buscas?
+                </label>
+                <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl self-start">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    Est. por persona:
+                  </span>
+                  <span className="font-black text-amber-800 text-sm">
+                    {rangoPrecioActual}
+                  </span>
+                </div>
+              </div>
+
+              {/* --- ACTUALIZADO: Mapeo de tarjetas de chef dinámicas --- */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  "Tradicional Peruano",
-                  "Tradicional Español",
-                  "Fusión (Perú/España)",
-                ].map((especialidad) => (
+                {experienciasCulinarias.map((exp) => (
                   <label
-                    key={especialidad}
-                    className={`cursor-pointer border-2 rounded-2xl p-4 flex flex-col items-center text-center transition-all ${
-                      formData.tipoChef === especialidad
-                        ? "border-amber-500 bg-amber-50"
-                        : "border-slate-200 hover:border-amber-300"
+                    key={exp.id}
+                    className={`cursor-pointer border-2 rounded-2xl p-5 flex flex-col items-center text-center transition-all ${
+                      formData.tipoChef === exp.id
+                        ? "border-amber-500 bg-amber-50/60 shadow-sm transform scale-[1.01]"
+                        : "border-slate-200 hover:border-amber-300 bg-white"
                     }`}
                   >
                     <input
                       type="radio"
                       name="tipoChef"
-                      value={especialidad}
-                      checked={formData.tipoChef === especialidad}
+                      value={exp.id}
+                      checked={formData.tipoChef === exp.id}
                       onChange={(e) =>
                         setFormData({ ...formData, tipoChef: e.target.value })
                       }
                       className="sr-only"
                     />
-                    <span className="text-2xl mb-2">
-                      {especialidad === "Tradicional Peruano"
-                        ? "🇵🇪"
-                        : especialidad === "Tradicional Español"
-                          ? "🇪🇸"
-                          : "🤝"}
+                    <span className="text-3xl mb-3 tracking-wider">
+                      {exp.banderas}
                     </span>
-                    <span className="font-bold text-slate-800">
-                      {especialidad}
+                    <span className="font-black text-slate-900 text-sm mb-1 leading-tight">
+                      {exp.titulo}
+                    </span>
+                    <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full mt-1 mb-3">
+                      👨‍🍳 {exp.chef}
+                    </span>
+                    {/* Tarifa base informativa por tarjeta */}
+                    <span className="text-[11px] font-bold text-slate-400 mt-auto">
+                      Tarifa base:{" "}
+                      {numComensales <= 5
+                        ? `${exp.precioBajo.min}-${exp.precioBajo.max}€`
+                        : `${exp.precioAlto.min}-${exp.precioAlto.max}€`}
                     </span>
                   </label>
                 ))}
@@ -217,9 +281,10 @@ export default function ReservasPage() {
             <div className="pt-8">
               <button
                 type="submit"
-                className="w-full bg-slate-900 text-white font-black text-xl py-4 rounded-xl hover:bg-slate-800 transition shadow-xl"
+                disabled={cargando}
+                className="w-full bg-slate-900 text-white font-black text-xl py-4 rounded-xl hover:bg-slate-800 transition shadow-xl cursor-pointer disabled:opacity-50 uppercase tracking-wider"
               >
-                Solicitar Presupuesto
+                {cargando ? "Procesando solicitud..." : "Solicitar Presupuesto"}
               </button>
             </div>
           </form>

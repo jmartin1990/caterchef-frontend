@@ -1,27 +1,13 @@
-// src/app/page.tsx
-// 1. "use client" le dice a Next.js que este componente interactúa en tiempo real con el usuario en el navegador.
+// src/app/carta/page.tsx
 "use client";
 
-import { useEffect, useState, SyntheticEvent } from "react";
+import { useEffect, useState, SyntheticEvent, Suspense } from "react";
+import { useSearchParams } from "next/navigation"; // --- CONSUMO DE QUERY PARAMS ---
 import Link from "next/link";
 // --- CONSUMO DEL CONTEXTO DE SEGURIDAD (TFG: Control de Sesión Global) ---
 import { useAuth } from "@/context/AuthContext";
-
-// 2. INTERFACES TYPESCRIPT: Estructura exacta de las entidades mapeadas con Neon.
-interface Plato {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  precio: number;
-  categoria: string;
-  alergenos: string;
-  disponible: boolean;
-}
-
-interface ItemCarrito {
-  plato: Plato;
-  cantidad: number;
-}
+// --- CONSUMO DEL ESTADO REACTIVO DEL CARRITO GLOBAL (TFG: Persistencia Unificada) ---
+import { useCart, Plato } from "@/context/CartContext";
 
 // --- MAPEO DE DISTRITOS DE REPARTO OFICIALES DE LA EMPRESA (TFG: Reglas de Negocio Dinámicas) ---
 const ZONAS_REPARTO: Record<string, string[]> = {
@@ -57,23 +43,59 @@ const ZONAS_REPARTO: Record<string, string[]> = {
   ],
 };
 
-export default function Home() {
-  // 3. ESTADOS BASE
+// Horarios de entrega estándar
+const HORAS_DISPONIBLES = [
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+  "21:00",
+  "22:00",
+];
+
+function CartaContent() {
+  const searchParams = useSearchParams(); // Captura los parámetros de la URL para el Mini-Cart del Navbar
+
+  // ESTADOS BASE DEL CATÁLOGO
   const [platos, setPlatos] = useState<Plato[]>([]);
   const [cargando, setCargando] = useState(true);
+
+  // --- ESTADOS PARA EL SISTEMA DE DOBLE FILTRADO INTERACTIVO ---
+  const [filtroCocina, setFiltroCocina] = useState<
+    "fusion" | "peruana" | "espanola"
+  >("fusion");
   const [categoriaActiva, setCategoriaActiva] = useState<string>("Todas");
 
-  // ESTADOS AVISOS
+  // --- ESTADO DE CONTROL DE VOLUMEN (Max 30 por unidad) ---
+  const [cantidadesPrevia, setCantidadesPrevia] = useState<
+    Record<number, number>
+  >({});
+
+  // ESTADOS GESTIÓN DE AVISOS DE STOCK
   const [platoParaAviso, setPlatoParaAviso] = useState<Plato | null>(null);
   const [emailAviso, setEmailAviso] = useState("");
 
-  // ESTADOS GESTIÓN DEL CARRITO
-  const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
+  // --- INYECCIÓN DE OPERACIONES DEL CONTEXTO DEL CARRITO GLOBAL ---
+  const {
+    carrito,
+    agregarAlCarrito,
+    quitarDelCarrito,
+    incrementarCantidad,
+    decrementarCantidad,
+    vaciarCarrito,
+    totalItems,
+    totalPrecioBase,
+  } = useCart();
+
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [pasoCarrito, setPasoCarrito] = useState<1 | 2>(1);
-
-  // Control de hidratación para LocalStorage
-  const [estaMontado, setEstaMontado] = useState(false);
 
   // Extraemos la reactividad global y el Token directamente del AuthContext
   const { token, estaLogueado, iniciarSesion } = useAuth();
@@ -92,7 +114,7 @@ export default function Home() {
     telefono: "",
   });
 
-  // --- ESTADOS COMPLEMENTARIOS (TFG: Control de Descuentos) ---
+  // --- ESTADOS COMPLEMENTARIOS PERFIL ---
   const [perfilUsuario, setPerfilUsuario] = useState<{
     nombre: string;
     apellidos: string;
@@ -100,10 +122,14 @@ export default function Home() {
     es_primera_compra: boolean;
   } | null>(null);
 
-  // --- ESTADO DEL FORMULARIO DE PEDIDOS (TFG: DTO de Envío Relacional Unificado) ---
+  // --- ESTADO PARA BLOQUEO DE HORAS (Prevención de Concurrencia de Pedidos) ---
+  const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
+
+  // --- DTO DE ENVÍO EXTENDIDO CON SOPORTE PARA INVITADOS (TFG: Normalización Estructurada) ---
   const [pedidoFormData, setPedidoFormData] = useState({
     tipo_servicio: "Catering Completo",
-    fecha_servicio: "",
+    fecha_servicio_dia: "",
+    fecha_servicio_hora: HORAS_DISPONIBLES[0],
     direccion_calle: "",
     ciudad: "Madrid",
     provincia: "Madrid",
@@ -111,12 +137,29 @@ export default function Home() {
     codigo_postal: "",
     telefono: "",
     notas_cliente: "",
+    nombre_invitado: "",
+    apellidos_invitado: "",
+    email_invitado: "",
   });
 
-  // --- EFECTO REACTIVO PARA CARGAR LA INFORMACIÓN COMPLETA DEL PERFIL ---
+  // --- CÁLCULO DE MARGEN DE 24 HORAS PARA PREPARACIÓN (TFG: Logística) ---
+  const fechaActual = new Date();
+  fechaActual.setDate(fechaActual.getDate() + 1); // Sumamos 1 día (24h) de margen obligatorio
+  const fechaMinimaPermitida = fechaActual.toISOString().split("T")[0];
+
+  // --- EFECTO: Abre el carrito si detecta ?openCart=true en la URL ---
+  useEffect(() => {
+    const shouldOpen = searchParams.get("openCart");
+    if (shouldOpen === "true") {
+      setMostrarCarrito(true);
+      setPasoCarrito(1);
+    }
+  }, [searchParams]);
+
+  // --- EFECTO: CARGAR PERFIL ACTIVO CON LOCALHOST (Previene errores de CORS) ---
   useEffect(() => {
     if (token) {
-      fetch("http://127.0.0.1:8000/api/me", {
+      fetch("http://localhost:8000/api/me", {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => (res.ok ? res.json() : null))
@@ -131,7 +174,7 @@ export default function Home() {
     }
   }, [token]);
 
-  // --- EFECTO DE SINCRONIZACIÓN REACTIVA DE DISTRITOS ---
+  // --- EFECTO: SINCRONIZACIÓN REACTIVA DE DISTRITOS ---
   useEffect(() => {
     const ciudadActual = pedidoFormData.ciudad;
     setPedidoFormData((prev) => ({
@@ -141,30 +184,46 @@ export default function Home() {
     }));
   }, [pedidoFormData.ciudad]);
 
-  // --- PERSISTENCIA LOCAL DEL CARRITO (TFG: Tolerancia a fallos por refresco F5) ---
+  // --- EFECTO: CONSULTA DE HORARIOS OCUPADOS AL SELECCIONAR UNA FECHA ---
   useEffect(() => {
-    const carritoGuardado = localStorage.getItem("carrito_caterchef");
-    if (carritoGuardado) {
-      try {
-        setCarrito(JSON.parse(carritoGuardado));
-      } catch (e) {
-        console.error("Error al recuperar el carrito desde localStorage", e);
-      }
-    }
-    setEstaMontado(true);
-  }, []);
+    if (pedidoFormData.fecha_servicio_dia) {
+      fetch(
+        `http://localhost:8000/api/horarios-ocupados?fecha=${pedidoFormData.fecha_servicio_dia}`,
+      )
+        .then((res) => (res.ok ? res.json() : { horas_ocupadas: [] }))
+        .then((data) => {
+          const ocupadas = data.horas_ocupadas || [];
+          setHorasOcupadas(ocupadas);
 
+          if (ocupadas.includes(pedidoFormData.fecha_servicio_hora)) {
+            const primeraLibre = HORAS_DISPONIBLES.find(
+              (h) => !ocupadas.includes(h),
+            );
+            if (primeraLibre) {
+              setPedidoFormData((prev) => ({
+                ...prev,
+                fecha_servicio_hora: primeraLibre,
+              }));
+            }
+          }
+        })
+        .catch(() => setHorasOcupadas([]));
+    }
+  }, [pedidoFormData.fecha_servicio_dia, pedidoFormData.fecha_servicio_hora]);
+
+  // --- EFECTO: CONTROL DE CESTA VACÍA ---
   useEffect(() => {
-    if (estaMontado) {
-      localStorage.setItem("carrito_caterchef", JSON.stringify(carrito));
+    if (carrito.length === 0) {
+      setMostrarCarrito(false);
+      setPasoCarrito(1);
     }
-  }, [carrito, estaMontado]);
+  }, [carrito.length]);
 
-  // 4. EL CONECTOR (useEffect): Carga inicial desde FastAPI
+  // --- EFECTO: CARGA INICIAL DESDE FASTAPI CON LOCALHOST ---
   useEffect(() => {
     const obtenerPlatos = async () => {
       try {
-        const respuesta = await fetch("http://127.0.0.1:8000/api/platos");
+        const respuesta = await fetch("http://localhost:8000/api/platos");
         const datos = await respuesta.json();
         setPlatos(datos);
       } catch (error) {
@@ -176,76 +235,102 @@ export default function Home() {
     obtenerPlatos();
   }, []);
 
-  const categoriesUnicas = [
+  // --- EVALUACIÓN DEL DOBLE FILTRO EN CALIENTE ---
+  const platosFiltrados = platos.filter((plato) => {
+    let cumpleCocina = false;
+    if (filtroCocina === "fusion")
+      cumpleCocina = plato.id >= 1 && plato.id <= 6;
+    if (filtroCocina === "peruana")
+      cumpleCocina = plato.id >= 7 && plato.id <= 12;
+    if (filtroCocina === "espanola")
+      cumpleCocina = plato.id >= 13 && plato.id <= 18;
+
+    const cumpleCategoria =
+      categoriaActiva === "Todas" || plato.categoria === categoriaActiva;
+    return cumpleCocina && cumpleCategoria;
+  });
+
+  const categoriasDisponibles = [
     "Todas",
-    ...new Set(platos.map((plato) => plato.categoria)),
+    ...new Set(
+      platos
+        .filter((p) => {
+          if (filtroCocina === "fusion") return p.id >= 1 && p.id <= 6;
+          if (filtroCocina === "peruana") return p.id >= 7 && p.id <= 12;
+          return p.id >= 13 && p.id <= 18;
+        })
+        .map((p) => p.categoria),
+    ),
   ];
 
-  const platosMostrados =
-    categoriaActiva === "Todas"
-      ? platos
-      : platos.filter((plato) => plato.categoria === categoriaActiva);
+  const incrementarCantidadPrevia = (platoId: number) => {
+    setCantidadesPrevia((prev) => ({
+      ...prev,
+      [platoId]: Math.min((prev[platoId] || 1) + 1, 30),
+    }));
+  };
 
-  // INTERCEPTOR CONTROLADOR DE COMPRA
-  const intentarAgregarAlCarrito = (plato: Plato) => {
+  const decrementarCantidadPrevia = (platoId: number) => {
+    setCantidadesPrevia((prev) => ({
+      ...prev,
+      [platoId]: Math.max((prev[platoId] || 1) - 1, 1),
+    }));
+  };
+
+  // Interceptor al hacer click en "Añadir Cesta"
+  const intentarAgregarAlCarrito = (e: SyntheticEvent, plato: Plato) => {
+    e.preventDefault();
+    const cantidadACargar = cantidadesPrevia[plato.id] || 1;
     if (estaLogueado) {
-      agregarAlCarrito(plato);
+      agregarAlCarrito(plato, cantidadACargar);
     } else {
       setPlatoPendiente(plato);
-      setMostrarModalAuth(true); // Incitación comercial al registro
+      setMostrarModalAuth(true);
     }
   };
 
   const continuarComoInvitado = () => {
-    if (mostrarCarrito) {
-      setPasoCarrito(2);
-    } else if (platoPendiente) {
-      agregarAlCarrito(platoPendiente);
+    if (platoPendiente) {
+      const cantidadACargar = cantidadesPrevia[platoPendiente.id] || 1;
+      agregarAlCarrito(platoPendiente, cantidadACargar);
+      setMostrarCarrito(true);
+      setPasoCarrito(1);
     }
     setMostrarModalAuth(false);
     setPlatoPendiente(null);
   };
 
-  // MANEJADOR DE AUTENTICACIÓN ASÍNCRONA DESDE EL MODAL (Checkout Login)
   const manejarSubmitAuth = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (vistaAuth === "recuperar") {
       try {
         const respuesta = await fetch(
-          "http://127.0.0.1:8000/api/recuperar-password",
+          "http://localhost:8000/api/recuperar-password",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: authFormData.email }),
           },
         );
-
         if (respuesta.ok) {
-          alert(
-            "🔑 [Modo TFG / Auditoría SMTP]: Correo electrónico verificado en Neon DB. Se ha enviado un token temporal a su bandeja de entrada.",
-          );
+          alert("🔑 Enlace de recuperación enviado correctamente.");
           setVistaAuth("login");
-        } else {
-          const err = await respuesta.json();
-          alert(`Error: ${err.detail}`);
         }
       } catch (error) {
-        alert("Fallo al conectar con el protocolo de seguridad.");
+        alert("Fallo de comunicación de seguridad.");
       }
       return;
     }
 
     if (vistaAuth === "registro" && !aceptaPrivacidad) {
-      alert(
-        "Debes aceptar la Política de Privacidad para registrar tu cuenta.",
-      );
+      alert("Debes aceptar la Política de Privacidad.");
       return;
     }
 
     try {
       if (vistaAuth === "registro") {
-        const respuesta = await fetch("http://127.0.0.1:8000/api/registro", {
+        const respuesta = await fetch("http://localhost:8000/api/registro", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -257,21 +342,22 @@ export default function Home() {
         if (respuesta.ok) {
           const datos = await respuesta.json();
           iniciarSesion(datos.access_token);
-          alert("¡Perfil creado con éxito! Disfruta de tu 5% de descuento.");
-          if (platoPendiente) agregarAlCarrito(platoPendiente);
+          alert("¡Perfil creado! Disfruta de tu 5% de descuento.");
+          if (platoPendiente) {
+            const cantidadACargar = cantidadesPrevia[platoPendiente.id] || 1;
+            agregarAlCarrito(platoPendiente, cantidadACargar);
+          }
           setMostrarModalAuth(false);
           setPlatoPendiente(null);
-          if (mostrarCarrito) setPasoCarrito(2);
-        } else {
-          const error = await respuesta.json();
-          alert(`Error en el registro: ${error.detail || "Datos inválidos."}`);
+          setMostrarCarrito(true);
+          setPasoCarrito(1);
         }
       } else {
         const params = new URLSearchParams();
         params.append("username", authFormData.email);
         params.append("password", authFormData.password);
 
-        const respuesta = await fetch("http://127.0.0.1:8000/api/login", {
+        const respuesta = await fetch("http://localhost:8000/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: params,
@@ -280,35 +366,60 @@ export default function Home() {
         if (respuesta.ok) {
           const datos = await respuesta.json();
           iniciarSesion(datos.access_token);
-          alert("¡Sesión iniciada correctamente!");
-          if (platoPendiente) agregarAlCarrito(platoPendiente);
+          alert("Sesión iniciada.");
+          if (platoPendiente) {
+            const cantidadACargar = cantidadesPrevia[platoPendiente.id] || 1;
+            agregarAlCarrito(platoPendiente, cantidadACargar);
+          }
           setMostrarModalAuth(false);
           setPlatoPendiente(null);
-          if (mostrarCarrito) setPasoCarrito(2);
+          setMostrarCarrito(true);
+          setPasoCarrito(1);
         } else {
-          alert("Credenciales incorrectas o cuenta inactiva.");
+          alert("Credenciales incorrectas.");
         }
       }
     } catch (error) {
-      console.error("Error en la autenticación:", error);
-      alert("No se pudo establecer comunicación segura con el servidor.");
+      alert("Error en la conexión con el servidor.");
     }
   };
 
-  // --- MASTER ENVIAR CHECKOUT REAL ---
   const manejarSubmitPedido = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    const dateObjeto = new Date(pedidoFormData.fecha_servicio_dia);
+    if (dateObjeto.getDay() === 0 || dateObjeto.getDay() === 6) {
+      alert(
+        "📅 Entregas disponibles únicamente de Lunes a Viernes laborables.",
+      );
+      return;
+    }
+
     const itemsPayload = carrito.map((item) => ({
       plato_id: item.plato.id,
-      cantidad: item.cantidad,
+      amount: item.cantidad,
       precio_unitario: item.plato.precio,
     }));
 
+    const datetimeFusionado = `${pedidoFormData.fecha_servicio_dia}T${pedidoFormData.fecha_servicio_hora}:00`;
+
     const payload = {
-      ...pedidoFormData,
-      total: totalPrecioFinal,
       items: itemsPayload,
+      total: totalPrecioFinal,
+      tipo_servicio: pedidoFormData.tipo_servicio,
+      fecha_servicio: datetimeFusionado,
+      direccion_calle: pedidoFormData.direccion_calle,
+      provincia: pedidoFormData.provincia,
+      ciudad: pedidoFormData.ciudad,
+      distrito: pedidoFormData.distrito,
+      telefono: pedidoFormData.telefono,
+      codigo_postal: pedidoFormData.codigo_postal,
+      notes_cliente: pedidoFormData.notas_cliente,
+      nombre_invitado: !estaLogueado ? pedidoFormData.nombre_invitado : null,
+      apellidos_invitado: !estaLogueado
+        ? pedidoFormData.apellidos_invitado
+        : null,
+      email_invitado: !estaLogueado ? pedidoFormData.email_invitado : null,
     };
 
     const headers: Record<string, string> = {
@@ -317,7 +428,7 @@ export default function Home() {
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
     try {
-      const respuesta = await fetch("http://127.0.0.1:8000/api/pedidos", {
+      const respuesta = await fetch("http://localhost:8000/api/pedidos", {
         method: "POST",
         headers: headers,
         body: JSON.stringify(payload),
@@ -325,28 +436,14 @@ export default function Home() {
 
       if (respuesta.ok) {
         const resultado = await respuesta.json();
-        alert(
-          `¡Pedido procesado con éxito! Código de ticket: #${resultado.pedido_id}.`,
-        );
-
-        setCarrito([]);
+        alert(`¡Pedido procesado con éxito! Ticket: #${resultado.pedido_id}.`);
+        vaciarCarrito();
         setMostrarCarrito(false);
         setPasoCarrito(1);
-        localStorage.removeItem("carrito_caterchef");
-
-        if (token) {
-          const resMe = await fetch("http://127.0.0.1:8000/api/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (resMe.ok) {
-            const dataMe = await resMe.json();
-            setPerfilUsuario(dataMe);
-          }
-        }
-
         setPedidoFormData({
           tipo_servicio: "Catering Completo",
-          fecha_servicio: "",
+          fecha_servicio_dia: "",
+          fecha_servicio_hora: HORAS_DISPONIBLES[0],
           direccion_calle: "",
           ciudad: "Madrid",
           provincia: "Madrid",
@@ -354,62 +451,81 @@ export default function Home() {
           codigo_postal: "",
           telefono: "",
           notas_cliente: "",
+          nombre_invitado: "",
+          apellidos_invitado: "",
+          email_invitado: "",
         });
-      } else {
-        const errorData = await respuesta.json();
-        alert(`Fallo en la transacción: ${errorData.detail}`);
       }
     } catch (error) {
-      alert("Error crítico de comunicación con el servidor.");
+      alert("Error crítico al procesar la compra.");
     }
   };
 
-  // OPERACIONES DEL CARRITO
-  const agregarAlCarrito = (plato: Plato) => {
-    setCarrito((carritoActual) => {
-      const itemExistente = carritoActual.find(
-        (item) => item.plato.id === plato.id,
-      );
-      if (itemExistente) {
-        return carritoActual.map((item) =>
-          item.plato.id === plato.id
-            ? { ...item, cantidad: item.cantidad + 1 }
-            : item,
-        );
-      }
-      return [...carritoActual, { plato, cantidad: 1 }];
-    });
-  };
-
-  const quitarDelCarrito = (idPlato: number) => {
-    setCarrito((carritoActual) => {
-      const nuevoCarrito = carritoActual.filter(
-        (item) => item.plato.id !== idPlato,
-      );
-      if (nuevoCarrito.length === 0) setPasoCarrito(1);
-      return nuevoCarrito;
-    });
-  };
-
-  // --- CÓMPUTOS DERIVADOS CON LÓGICA DE COSTES DE ENVÍO Y DESCUENTO LIMITADO (TFG) ---
-  const totalPrecioBase = carrito.reduce(
-    (total, item) => total + item.plato.precio * item.cantidad,
-    0,
-  );
-  const totalItems = carrito.reduce((total, item) => total + item.cantidad, 0);
-
+  // --- CÓMPUTOS DERIVADOS ---
   const aplicaDescuento = estaLogueado && perfilUsuario?.es_primera_compra;
   const descuentoFidelidad = aplicaDescuento ? totalPrecioBase * 0.05 : 0;
   const subtotalConDescuento = totalPrecioBase - descuentoFidelidad;
+  const costoEnvio =
+    totalPrecioBase === 0 ? 0 : totalPrecioBase >= 80 ? 0 : 4.9;
+  const totalPrecioFinal =
+    totalPrecioBase === 0 ? 0 : subtotalConDescuento + costoEnvio;
 
-  const costoEnvio = totalPrecioBase >= 80 ? 0 : 4.9;
-  const totalPrecioFinal = subtotalConDescuento + costoEnvio;
+  const ComponenteListaCarritoEditable = () => (
+    <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+      {carrito.map((item) => (
+        <div
+          key={item.plato.id}
+          className="flex justify-between items-center border-b border-slate-100 pb-3"
+        >
+          <div className="w-2/5">
+            <h4 className="font-bold text-slate-800 text-xs truncate">
+              {item.plato.nombre}
+            </h4>
+            <p className="text-[10px] text-slate-400 font-mono">
+              {Number(item.plato.precio).toFixed(2)}€/ud
+            </p>
+          </div>
+          <div className="flex items-center border border-slate-200 rounded-lg bg-white p-0.5 font-mono">
+            <button
+              type="button"
+              onClick={() => decrementarCantidad(item.plato.id)}
+              className="px-2 text-xs font-black text-slate-400 hover:text-red-500 cursor-pointer"
+            >
+              -
+            </button>
+            <span className="px-1.5 text-xs font-black text-slate-700 w-5 text-center">
+              {item.cantidad}
+            </span>
+            <button
+              type="button"
+              onClick={() => incrementarCantidad(item.plato.id)}
+              className="px-2 text-xs font-black text-slate-400 hover:text-emerald-500 cursor-pointer"
+            >
+              +
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-black text-slate-900 font-mono text-xs">
+              {(item.plato.precio * item.cantidad).toFixed(2)}€
+            </span>
+            <button
+              type="button"
+              onClick={() => quitarDelCarrito(item.plato.id)}
+              className="text-red-400 hover:text-red-600 text-xs bg-red-50 p-1 rounded-md"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   const manejarEnvioAviso = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!platoParaAviso) return;
     try {
-      const respuesta = await fetch("http://127.0.0.1:8000/api/lista-espera", {
+      const respuesta = await fetch("http://localhost:8000/api/lista-espera", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -437,384 +553,588 @@ export default function Home() {
     );
 
   return (
-    <main className="min-h-screen p-10 bg-slate-50 text-slate-800 font-sans relative pb-32">
+    <main className="min-h-screen p-6 md:p-10 bg-slate-50 text-slate-800 font-sans relative pb-32">
       <div className="max-w-6xl mx-auto">
-        {/* --- ACTUALIZADO: CABECERA LIMPIA EXCLUSIVA DEL CATÁLOGO --- */}
-        <header className="mb-12 text-center relative flex flex-col items-center">
-          <h1 className="text-5xl font-black mb-4 text-slate-900 tracking-tight mt-4">
-            Nuestra Carta Fusión
+        <header className="mb-10 text-center flex flex-col items-center border-b border-slate-200 pb-8">
+          <span className="text-amber-600 font-bold tracking-[0.2em] uppercase text-xs mb-2 block">
+            Menú Gastronómico
+          </span>
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight">
+            Nuestra Carta Gourmet
           </h1>
-          <p className="text-lg text-slate-500 font-medium mb-8">
+          <p className="text-sm text-slate-500 font-medium mt-1">
             Conectado en tiempo real con FastAPI y Neon DB
           </p>
-
-          <div className="flex flex-wrap justify-center gap-3 mb-10">
-            {categoriesUnicas.map((categoria) => (
-              <button
-                key={categoria}
-                onClick={() => setCategoriaActiva(categoria)}
-                className={`px-5 py-2 rounded-full font-semibold transition-all duration-300 ${categoriaActiva === categoria ? "bg-slate-900 text-white shadow-md scale-105" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900"}`}
-              >
-                {categoria}
-              </button>
-            ))}
-          </div>
         </header>
 
-        {/* LISTADO DE PLATOS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {platosMostrados.map((plato) => (
-            <div
-              key={plato.id}
-              className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-            >
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
-                  {plato.categoria}
-                </span>
-                <h2 className="text-2xl font-bold mt-5 mb-3 text-slate-800 leading-tight">
-                  {plato.nombre}
-                </h2>
-                <p className="text-slate-600 mb-4 line-clamp-3 leading-relaxed">
-                  {plato.descripcion}
-                </p>
-                <p className="text-sm text-slate-400 mb-6 font-medium bg-slate-50 inline-block px-2 py-1 rounded">
-                  Alérgenos: {plato.alergenos}
-                </p>
-              </div>
-
-              <div className="flex justify-between items-center pt-5 border-t border-slate-100 mt-auto">
-                <span className="text-3xl font-black text-slate-900">
-                  {plato.precio}€
-                </span>
-                {plato.disponible ? (
-                  <button
-                    onClick={() => intentarAgregarAlCarrito(plato)}
-                    className="bg-slate-900 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-slate-800 active:scale-95 transition-all shadow-md"
-                  >
-                    Añadir +
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setPlatoParaAviso(plato)}
-                    className="bg-orange-100 text-orange-700 font-bold px-5 py-2.5 rounded-xl hover:bg-orange-200 transition-colors shadow-sm ring-1 ring-orange-300"
-                  >
-                    ¡Avísame!
-                  </button>
-                )}
-              </div>
+        {/* CONTROLES DE FILTRADO */}
+        <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs mb-10 space-y-6 animate-fade-in">
+          <div>
+            <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+              1. Selecciona el estilo de cocina
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltroCocina("fusion");
+                  setCategoriaActiva("Todas");
+                }}
+                className={`px-5 py-3.5 rounded-xl text-xs font-black tracking-wider uppercase border cursor-pointer ${filtroCocina === "fusion" ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+              >
+                🤝 Alta Cocina Fusión (Perú/España)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltroCocina("peruana");
+                  setCategoriaActiva("Todas");
+                }}
+                className={`px-5 py-3.5 rounded-xl text-xs font-black tracking-wider uppercase border cursor-pointer ${filtroCocina === "peruana" ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+              >
+                🇵🇪 Tradicional Peruana 100%
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltroCocina("espanola");
+                  setCategoriaActiva("Todas");
+                }}
+                className={`px-5 py-3.5 rounded-xl text-xs font-black tracking-wider uppercase border cursor-pointer ${filtroCocina === "espanola" ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"}`}
+              >
+                🇪🇸 Tradicional Española 100%
+              </button>
             </div>
-          ))}
+          </div>
+          <div className="pt-5 border-t border-slate-100">
+            <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+              2. Filtra por categoría de menú
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {categoriasDisponibles.map((categoria) => (
+                <button
+                  key={categoria}
+                  type="button"
+                  onClick={() => setCategoriaActiva(categoria)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer ${categoriaActiva === categoria ? "bg-amber-500 text-white border-amber-500 font-black shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+                >
+                  {categoria === "Todas"
+                    ? "🍽️ Mostrar todo"
+                    : categoria === "Entrante"
+                      ? "🥗 Entrantes"
+                      : categoria === "Principal"
+                        ? "🥩 Principales"
+                        : "🍰 Postres"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* TARJETAS DE PRODUCTOS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {platosFiltrados.length === 0 ? (
+            <div className="col-span-full bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
+              <span className="text-4xl block mb-2">🍃</span>
+              <p className="text-slate-400 font-medium">
+                No hay platos disponibles en este momento.
+              </p>
+            </div>
+          ) : (
+            platosFiltrados.map((plato) => (
+              <div
+                key={plato.id}
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+              >
+                <div>
+                  {plato.imagen_url && (
+                    <div className="w-full h-44 rounded-xl overflow-hidden mb-4 relative border border-slate-100 bg-slate-100">
+                      {/* --- MODIFICADO: Estructura adaptativa para soportar URLs relativas o externas --- */}
+                      <img
+                        src={
+                          plato.imagen_url.startsWith("http")
+                            ? plato.imagen_url
+                            : `/images/${plato.imagen_url}`
+                        }
+                        alt={plato.nombre}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+                    {plato.categoria}
+                  </span>
+                  <h2 className="text-xl font-bold mt-4 mb-2 text-slate-800 tracking-tight leading-tight">
+                    {plato.nombre}
+                  </h2>
+                  <p className="text-slate-500 text-xs font-light mb-4 line-clamp-3 leading-relaxed">
+                    {plato.descripcion}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mb-6 font-semibold bg-slate-50 inline-block px-2.5 py-1 rounded border border-slate-100">
+                    ⚠️ Alérgenos: {plato.alergenos || "Ninguno"}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 pt-4 border-t border-slate-100 mt-auto">
+                  <div className="flex justify-between items-center">
+                    <span className="text-2xl font-black text-slate-900 font-mono">
+                      {Number(plato.precio).toFixed(2)}€
+                    </span>
+                    {plato.disponible && (
+                      <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1 font-mono">
+                        <button
+                          type="button"
+                          onClick={() => decrementarCantidadPrevia(plato.id)}
+                          className="px-2.5 py-0.5 font-bold text-slate-400 hover:text-red-500 text-sm"
+                        >
+                          -
+                        </button>
+                        <span className="px-2 text-xs font-black text-slate-700 w-6 text-center">
+                          {cantidadesPrevia[plato.id] || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => incrementarCantidadPrevia(plato.id)}
+                          className="px-2.5 py-0.5 font-bold text-slate-400 hover:text-emerald-500 text-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => intentarAgregarAlCarrito(e, plato)}
+                    className="w-full bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl hover:bg-amber-500 transition-all uppercase tracking-wider cursor-pointer"
+                  >
+                    Añadir Cesta
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
+      {/* TRIGGER DEL CARRITO */}
       {totalItems > 0 && (
         <button
+          type="button"
           onClick={() => setMostrarCarrito(true)}
-          className="fixed bottom-8 right-8 z-30 bg-amber-500 hover:bg-amber-600 text-white px-6 py-4 rounded-full shadow-2xl font-bold text-lg flex items-center gap-3 transition-transform hover:scale-105"
+          className="fixed bottom-8 right-8 z-30 bg-amber-500 hover:bg-amber-600 text-white px-6 py-4 rounded-full shadow-2xl font-bold text-lg flex items-center gap-3 transition-transform hover:scale-105 cursor-pointer"
         >
           <span>🛒 Tu Pedido ({totalItems})</span>
-          <span className="bg-white/20 px-3 py-1 rounded-full">
+          <span className="bg-white/20 px-3 py-1 rounded-full font-mono">
             {totalPrecioFinal.toFixed(2)}€
           </span>
         </button>
       )}
 
-      {/* --- MODAL DE CARRITO MULTIPASO --- */}
+      {/* --- MODAL DEL CARRITO MULTIPASO --- */}
       {mostrarCarrito && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-8 max-w-xl w-full shadow-2xl max-h-[90vh] flex flex-col animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-3xl font-black text-slate-900">
+        <div className="fixed inset-0 bg-black/60 flex items-start md:items-center justify-center p-4 z-60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-full sm:max-w-lg md:max-w-2xl w-full shadow-2xl mt-20 mb-6 md:my-8 flex flex-col relative animate-fade-in">
+            <div className="flex justify-between items-center mb-6 pb-2 border-b border-slate-100">
+              <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
                 {pasoCarrito === 1 ? "Tu Pedido" : "Datos de Entrega"}
               </h3>
               <button
+                type="button"
                 onClick={() => {
                   setMostrarCarrito(false);
                   setPasoCarrito(1);
                 }}
-                className="text-slate-400 hover:text-slate-800 text-2xl font-bold"
+                className="text-slate-400 hover:text-slate-800 text-3xl font-light cursor-pointer p-1"
               >
                 &times;
               </button>
             </div>
 
-            {pasoCarrito === 1 ? (
-              <>
-                <div className="overflow-y-auto pr-2 mb-6 space-y-4 flex-1">
-                  {carrito.map((item) => (
-                    <div
-                      key={item.plato.id}
-                      className="flex justify-between items-center border-b border-slate-100 pb-4"
-                    >
-                      <div>
-                        <h4 className="font-bold text-slate-800">
-                          {item.plato.nombre}
-                        </h4>
-                        <p className="text-sm text-slate-500">
-                          Cantidad: {item.cantidad} x {item.plato.precio}€
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-black text-lg text-slate-900">
-                          {(item.plato.precio * item.cantidad).toFixed(2)}€
-                        </span>
-                        <button
-                          onClick={() => quitarDelCarrito(item.plato.id)}
-                          className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition-colors"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="overflow-y-auto pr-1 mb-2 flex-1 space-y-6 max-h-[60vh] md:max-h-[55vh]">
+              <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+                  Resumen del pedido actual
+                </span>
+                <ComponenteListaCarritoEditable />
+              </div>
 
-                <div className="border-t-2 border-slate-900 pt-4 space-y-2">
-                  <div className="flex justify-between items-center text-sm text-slate-600 font-medium">
+              {pasoCarrito === 1 ? (
+                /* PASO 1: TU PEDIDO */
+                <div className="pt-2 space-y-2">
+                  <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
                     <span>Subtotal comida</span>
-                    <span>{totalPrecioBase.toFixed(2)}€</span>
+                    <span className="font-mono">
+                      {totalPrecioBase.toFixed(2)}€
+                    </span>
                   </div>
-
                   {aplicaDescuento && (
-                    <div className="flex justify-between items-center text-sm text-emerald-600 font-bold">
+                    <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
                       <span>Descuento Fidelidad (5%)</span>
-                      <span>-{descuentoFidelidad.toFixed(2)}€</span>
+                      <span className="font-mono">
+                        -{descuentoFidelidad.toFixed(2)}€
+                      </span>
                     </div>
                   )}
-
                   <div className="flex flex-col border-b border-slate-100 pb-2">
-                    <div className="flex justify-between items-center text-sm text-slate-600 font-medium">
+                    <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
                       <span>Gastos de envío</span>
-                      <span>
+                      <span className="font-mono">
                         {costoEnvio === 0
                           ? "GRATIS"
                           : `${costoEnvio.toFixed(2)}€`}
                       </span>
                     </div>
                     {costoEnvio > 0 && (
-                      <p className="text-[11px] text-amber-600 font-semibold mt-0.5 text-right animate-pulse">
+                      <p className="text-[10px] text-amber-600 font-semibold mt-0.5 text-right animate-pulse">
                         💡 ¡Añade {(80 - totalPrecioBase).toFixed(2)}€ más para
                         conseguir envío GRATIS!
                       </p>
                     )}
                   </div>
-
                   <div className="flex justify-between items-center pt-2 mb-4">
-                    <span className="text-xl font-medium text-slate-600">
+                    <span className="text-sm md:text-base font-bold text-slate-700">
                       Total a Pagar
                     </span>
-                    <span className="text-4xl font-black text-amber-600">
+                    <span className="text-2xl md:text-3xl font-black text-amber-600 font-mono">
                       {totalPrecioFinal.toFixed(2)}€
                     </span>
                   </div>
-
                   <button
-                    onClick={() => {
-                      if (!estaLogueado) {
-                        setVistaAuth("login");
-                        setMostrarModalAuth(true);
-                      } else {
-                        setPasoCarrito(2);
-                      }
-                    }}
-                    className="w-full bg-slate-900 text-white font-bold text-xl py-4 rounded-xl hover:bg-slate-800 transition-colors shadow-lg"
+                    type="button"
+                    onClick={() => setPasoCarrito(2)}
+                    className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 text-xs md:text-sm uppercase tracking-wider cursor-pointer"
                   >
                     Siguiente: Datos de Envío →
                   </button>
                 </div>
-              </>
-            ) : (
-              <form
-                onSubmit={manejarSubmitPedido}
-                className="space-y-4 overflow-y-auto flex-1 pr-2"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Tipo de Servicio
-                    </label>
-                    <select
-                      value={pedidoFormData.tipo_servicio}
-                      onChange={(e) =>
-                        setPedidoFormData({
-                          ...pedidoFormData,
-                          tipo_servicio: e.target.value,
-                        })
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 bg-white text-sm font-medium"
-                    >
-                      <option>Catering Completo</option>
-                      <option>Sólo Comida (Entrega)</option>
-                      <option>Cóctel / Evento Corporativo</option>
-                    </select>
+              ) : (
+                /* PASO 2: DATOS DE ENTREGA */
+                <form onSubmit={manejarSubmitPedido} className="space-y-4 pt-2">
+                  {/* --- NUEVO: RESUMEN DE PEDIDO FINANCIERO (VISIBLE EN PASO 2) --- */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2 text-xs text-slate-600 mb-6">
+                    <div className="flex justify-between">
+                      <span>Subtotal comida</span>
+                      <span className="font-mono">
+                        {totalPrecioBase.toFixed(2)}€
+                      </span>
+                    </div>
+                    {aplicaDescuento && (
+                      <div className="flex justify-between text-emerald-600 font-bold">
+                        <span>Descuento Fidelidad (5%)</span>
+                        <span className="font-mono">
+                          -{descuentoFidelidad.toFixed(2)}€
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>Gastos de envío</span>
+                      <span className="font-mono">
+                        {costoEnvio === 0
+                          ? "GRATIS"
+                          : `${costoEnvio.toFixed(2)}€`}
+                      </span>
+                    </div>
+                    {costoEnvio > 0 && (
+                      <p className="text-[10px] text-amber-600 font-semibold text-right animate-pulse">
+                        💡 ¡Añade {(80 - totalPrecioBase).toFixed(2)}€ más para
+                        conseguir envío GRATIS!
+                      </p>
+                    )}
+                    <div className="border-t border-slate-200 pt-2 flex justify-between font-black text-slate-900 text-sm">
+                      <span>Total a Pagar</span>
+                      <span className="text-amber-600">
+                        {totalPrecioFinal.toFixed(2)}€
+                      </span>
+                    </div>
                   </div>
+
+                  {!estaLogueado && (
+                    <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-100 space-y-3 mb-2 animate-fade-in">
+                      <span className="block text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                        👤 Información de Contacto (Pedido como Invitado)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                            Nombre
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Tu nombre"
+                            value={pedidoFormData.nombre_invitado}
+                            onChange={(e) =>
+                              setPedidoFormData({
+                                ...pedidoFormData,
+                                nombre_invitado: e.target.value,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs outline-none h-10 focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                            Apellidos
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Tus apellidos"
+                            value={pedidoFormData.apellidos_invitado}
+                            onChange={(e) =>
+                              setPedidoFormData({
+                                ...pedidoFormData,
+                                apellidos_invitado: e.target.value,
+                              })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs outline-none h-10 focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          Correo Electrónico de Confirmación
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="ejemplo@correo.com"
+                          value={pedidoFormData.email_invitado}
+                          onChange={(e) =>
+                            setPedidoFormData({
+                              ...pedidoFormData,
+                              email_invitado: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs outline-none h-10 focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                        Tipo de Servicio
+                      </label>
+                      <select
+                        value={pedidoFormData.tipo_servicio}
+                        onChange={(e) =>
+                          setPedidoFormData({
+                            ...pedidoFormData,
+                            tipo_servicio: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 bg-white text-xs font-medium outline-none h-10"
+                      >
+                        <option>Catering Completo</option>
+                        <option>Sólo Comida (Entrega)</option>
+                        <option>Cóctel / Evento Corporativo</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          Día de Entrega
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          min={fechaMinimaPermitida}
+                          value={pedidoFormData.fecha_servicio_dia}
+                          onChange={(e) =>
+                            setPedidoFormData({
+                              ...pedidoFormData,
+                              fecha_servicio_dia: e.target.value,
+                            })
+                          }
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 text-xs font-medium outline-none bg-white h-10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          Franja Horaria
+                        </label>
+                        <select
+                          required
+                          value={pedidoFormData.fecha_servicio_hora}
+                          onChange={(e) =>
+                            setPedidoFormData({
+                              ...pedidoFormData,
+                              fecha_servicio_hora: e.target.value,
+                            })
+                          }
+                          className="w-full px-2.5 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-amber-500 bg-white text-xs font-medium outline-none h-10"
+                        >
+                          {HORAS_DISPONIBLES.map((bloque) => {
+                            const estaOcupada = horasOcupadas.includes(bloque);
+                            return (
+                              <option
+                                key={bloque}
+                                value={bloque}
+                                disabled={estaOcupada}
+                              >
+                                {bloque} h {estaOcupada ? "(Ocupado)" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                        Ciudad de Entrega
+                      </label>
+                      <select
+                        value={pedidoFormData.ciudad}
+                        onChange={(e) =>
+                          setPedidoFormData({
+                            ...pedidoFormData,
+                            ciudad: e.target.value,
+                            provincia: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium h-10"
+                      >
+                        <option value="Madrid">Madrid (21 Distritos)</option>
+                        <option value="Toledo">Toledo (5 Distritos)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                        Zona de Cobertura
+                      </label>
+                      <select
+                        value={pedidoFormData.distrito}
+                        onChange={(e) =>
+                          setPedidoFormData({
+                            ...pedidoFormData,
+                            distrito: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium h-10"
+                      >
+                        {ZONAS_REPARTO[pedidoFormData.ciudad].map((barrio) => (
+                          <option key={barrio} value={barrio}>
+                            {barrio}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                        Dirección de Entrega
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Calle, número, portal, portal, piso"
+                        value={pedidoFormData.direccion_calle}
+                        onChange={(e) =>
+                          setPedidoFormData({
+                            ...pedidoFormData,
+                            direccion_calle: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs h-10"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                        Código Postal
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: 28013"
+                        value={pedidoFormData.codigo_postal}
+                        onChange={(e) =>
+                          setPedidoFormData((prev) => ({
+                            ...prev,
+                            codigo_postal: e.target.value,
+                          }))
+                        }
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs h-10"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Fecha y Hora del Evento
+                    <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                      Teléfono de Contacto Urgente
                     </label>
                     <input
-                      type="datetime-local"
+                      type="tel"
                       required
-                      value={pedidoFormData.fecha_servicio}
+                      placeholder="Ej: 612345678"
+                      value={pedidoFormData.telefono}
                       onChange={(e) =>
                         setPedidoFormData({
                           ...pedidoFormData,
-                          fecha_servicio: e.target.value,
+                          telefono: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-2 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm font-medium"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs h-10"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Ciudad de Entrega
+                    <label className="block text-[10px] md:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                      Notas especiales o Alérgenos (Opcional)
                     </label>
-                    <select
-                      value={pedidoFormData.ciudad}
+                    <textarea
+                      rows={2}
+                      placeholder="Especificaciones particulares para cocina..."
+                      value={pedidoFormData.notas_cliente}
                       onChange={(e) =>
                         setPedidoFormData({
                           ...pedidoFormData,
-                          ciudad: e.target.value,
-                          provincia: e.target.value,
+                          notas_cliente: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 bg-white text-sm font-medium"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setPasoCarrito(1)}
+                      className="w-1/3 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 text-xs cursor-pointer h-11"
                     >
-                      <option value="Madrid">Madrid (21 Distritos)</option>
-                      <option value="Toledo">Toledo (5 Distritos)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Distrito / Zona de Cobertura
-                    </label>
-                    <select
-                      value={pedidoFormData.distrito}
-                      onChange={(e) =>
-                        setPedidoFormData({
-                          ...pedidoFormData,
-                          distrito: e.target.value,
-                        })
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 bg-white text-sm font-medium"
+                      ← Volver
+                    </button>
+                    <button
+                      type="submit"
+                      className="w-2/3 bg-amber-500 text-white font-black py-3 rounded-xl hover:bg-amber-600 text-xs uppercase tracking-wider cursor-pointer h-11"
                     >
-                      {ZONAS_REPARTO[pedidoFormData.ciudad].map((barrio) => (
-                        <option key={barrio} value={barrio}>
-                          {barrio}
-                        </option>
-                      ))}
-                    </select>
+                      Confirmar ({totalPrecioFinal.toFixed(2)}€)
+                    </button>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Dirección de Entrega (Calle, número, portal, piso)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: Calle Gran Vía, 12, 4ºB"
-                      value={pedidoFormData.direccion_calle}
-                      onChange={(e) =>
-                        setPedidoFormData({
-                          ...pedidoFormData,
-                          direccion_calle: e.target.value,
-                        })
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      Código Postal
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: 28013"
-                      value={pedidoFormData.codigo_postal}
-                      onChange={(e) =>
-                        setPedidoFormData((prev) => ({
-                          ...prev,
-                          codigo_postal: e.target.value,
-                        }))
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    Teléfono Móvil de Contacto Urgente
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="Ej: 612345678"
-                    value={pedidoFormData.telefono}
-                    onChange={(e) =>
-                      setPedidoFormData({
-                        ...pedidoFormData,
-                        telefono: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    Notas especiales o Alérgenos (Opcional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Ej: Dos invitados son celíacos..."
-                    value={pedidoFormData.notas_cliente}
-                    onChange={(e) =>
-                      setPedidoFormData({
-                        ...pedidoFormData,
-                        notas_cliente: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm resize-none"
-                  />
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setPasoCarrito(1)}
-                    className="w-1/3 bg-slate-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition-colors text-sm"
-                  >
-                    ← Volver
-                  </button>
-                  <button
-                    type="submit"
-                    className="w-2/3 bg-amber-500 text-white font-black py-3.5 rounded-xl hover:bg-amber-600 transition-colors shadow-md text-sm uppercase tracking-wider"
-                  >
-                    Confirmar ({totalPrecioFinal.toFixed(2)}€)
-                  </button>
-                </div>
-              </form>
-            )}
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* --- MODAL DE ACCESO AL QUERER COMPRAR COMO INVITADO --- */}
+      {/* --- POP-UP COMERCIAL DE AUTENTICACIÓN --- */}
       {mostrarModalAuth && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative border-t-8 border-amber-500">
             <button
-              onClick={continuarComoInvitado}
-              className="absolute top-4 right-5 text-slate-400 hover:text-slate-800 text-3xl font-light"
+              type="button"
+              onClick={() => {
+                setMostrarModalAuth(false);
+                setPlatoPendiente(null);
+              }}
+              className="absolute top-4 right-5 text-slate-400 hover:text-slate-800 text-3xl font-light cursor-pointer"
             >
               &times;
             </button>
@@ -826,34 +1146,34 @@ export default function Home() {
                     ? "🔑"
                     : "🔒"}
               </span>
-              <h3 className="text-2xl font-black text-slate-900">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
                 {vistaAuth === "registro" && "Activa tu 5% Directo"}
                 {vistaAuth === "login" && "Ingresar a CaterChef"}
                 {vistaAuth === "recuperar" && "Recuperar Contraseña"}
               </h3>
-              <p className="text-sm text-slate-500 mt-2">
+              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
                 {vistaAuth === "registro" &&
-                  "Identifícate para guardar tu historial y aplicar ventajas."}
+                  "Registrarse para obtener el descuento del 5% Directo en tu primer pedido. Identifícate para guardar tu historial y aplicar ventajas."}
                 {vistaAuth === "login" &&
                   "Introduce tus credenciales para acceder a tu perfil."}
                 {vistaAuth === "recuperar" &&
-                  "Introduce tu email para restablecer la contraseña de tu cuenta."}
+                  "Introduce tu email para restablecer tu contraseña."}
               </p>
             </div>
 
             {vistaAuth !== "recuperar" && (
-              <div className="flex border-b border-slate-200 mb-6">
+              <div className="flex border-b border-slate-200 mb-6 text-sm">
                 <button
                   type="button"
                   onClick={() => setVistaAuth("registro")}
-                  className={`flex-1 pb-3 font-bold transition-colors ${vistaAuth === "registro" ? "border-b-2 border-amber-500 text-amber-600" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`flex-1 pb-3 font-bold cursor-pointer ${vistaAuth === "registro" ? "border-b-2 border-amber-500 text-amber-600" : "text-slate-400 hover:text-slate-600"}`}
                 >
                   Soy Nuevo
                 </button>
                 <button
                   type="button"
                   onClick={() => setVistaAuth("login")}
-                  className={`flex-1 pb-3 font-bold transition-colors ${vistaAuth === "login" ? "border-b-2 border-amber-500 text-amber-600" : "text-slate-400 hover:text-slate-600"}`}
+                  className={`flex-1 pb-3 font-bold cursor-pointer ${vistaAuth === "login" ? "border-b-2 border-amber-500 text-amber-600" : "text-slate-400 hover:text-slate-600"}`}
                 >
                   Ya tengo cuenta
                 </button>
@@ -875,7 +1195,7 @@ export default function Home() {
                           nombre: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs outline-none"
                     />
                     <input
                       type="text"
@@ -887,7 +1207,7 @@ export default function Home() {
                           apellidos: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs outline-none"
                     />
                   </div>
                   <input
@@ -901,11 +1221,10 @@ export default function Home() {
                         telefono: e.target.value,
                       })
                     }
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs outline-none"
                   />
                 </>
               )}
-
               <input
                 type="email"
                 placeholder="Correo electrónico"
@@ -914,9 +1233,8 @@ export default function Home() {
                 onChange={(e) =>
                   setAuthFormData({ ...authFormData, email: e.target.value })
                 }
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs outline-none"
               />
-
               {vistaAuth !== "recuperar" && (
                 <>
                   <input
@@ -931,14 +1249,14 @@ export default function Home() {
                         password: e.target.value,
                       })
                     }
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs outline-none"
                   />
                   {vistaAuth === "login" && (
                     <div className="text-right">
                       <button
                         type="button"
                         onClick={() => setVistaAuth("recuperar")}
-                        className="text-xs text-slate-400 hover:text-amber-600 underline font-medium transition-colors"
+                        className="text-[11px] text-slate-400 hover:text-amber-600 underline font-medium cursor-pointer"
                       >
                         ¿Olvidaste tu contraseña?
                       </button>
@@ -946,26 +1264,25 @@ export default function Home() {
                   )}
                 </>
               )}
-
               {vistaAuth === "registro" && (
-                <div className="flex items-start gap-2 pt-2">
+                <div className="flex items-start gap-2 pt-1">
                   <input
                     type="checkbox"
                     id="privacidad"
                     required
                     checked={aceptaPrivacidad}
                     onChange={(e) => setAceptaPrivacidad(e.target.checked)}
-                    className="mt-1 accent-amber-500 shadow-sm"
+                    className="mt-1 accent-amber-500 cursor-pointer"
                   />
                   <label
                     htmlFor="privacidad"
-                    className="text-xs text-slate-500 leading-snug select-none"
+                    className="text-[11px] text-slate-400 leading-snug cursor-pointer select-none"
                   >
                     He leído y acepto la{" "}
                     <Link
                       href="/privacidad"
                       target="_blank"
-                      className="text-amber-600 font-bold underline hover:text-amber-700 transition-colors"
+                      className="text-amber-600 font-bold underline"
                     >
                       Política de Privacidad
                     </Link>
@@ -973,50 +1290,38 @@ export default function Home() {
                   </label>
                 </div>
               )}
-
               <button
                 type="submit"
-                className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 shadow-md mt-4 transition-all"
+                className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl hover:bg-slate-800 text-xs uppercase tracking-wider cursor-pointer"
               >
                 {vistaAuth === "registro" && "Crear Perfil y Aplicar Descuento"}
                 {vistaAuth === "login" && "Entrar a mi Perfil"}
-                {vistaAuth === "recuperar" &&
-                  "Enviar Instrucciones Secundarias"}
+                {vistaAuth === "recuperar" && "Enviar Instrucciones"}
               </button>
-
-              {vistaAuth === "recuperar" && (
-                <button
-                  type="button"
-                  onClick={() => setVistaAuth("login")}
-                  className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-bold underline mt-2 block transition-colors"
-                >
-                  ← Volver al inicio de sesión
-                </button>
-              )}
             </form>
             <button
+              type="button"
               onClick={continuarComoInvitado}
-              className="w-full text-slate-500 font-semibold py-3 mt-2 hover:text-slate-800 transition-colors text-sm"
+              className="w-full text-slate-400 font-bold py-2 mt-2 hover:text-amber-600 text-xs cursor-pointer tracking-wide text-center"
             >
-              {mostrarCarrito
-                ? "Continuar con el Pedido (Como Invitado) →"
-                : "Seguir como Invitado"}
+              Seguir comprando sin registrarse →
             </button>
           </div>
         </div>
       )}
 
-      {/* MODAL AVISOS (Lista de espera) */}
       {platoParaAviso && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-bold mb-2">¿Te avisamos?</h3>
-            <p className="text-slate-600 mb-6">
-              Déjanos tu email y te enviaremos una notificación cuando el plato{" "}
-              <strong className="text-slate-900">
+            <h3 className="text-xl font-bold mb-2 tracking-tight text-slate-900">
+              ¿Te avisamos?
+            </h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Déjanos tu email y te notificaremos cuando{" "}
+              <strong className="text-slate-800">
                 "{platoParaAviso.nombre}"
               </strong>{" "}
-              vuelva a nuestra cocina.
+              vuelva.
             </p>
             <form onSubmit={manejarEnvioAviso}>
               <input
@@ -1025,19 +1330,19 @@ export default function Home() {
                 placeholder="tu@email.com"
                 value={emailAviso}
                 onChange={(e) => setEmailAviso(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 mb-4 text-xs"
               />
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setPlatoParaAviso(null)}
-                  className="px-5 py-2.5 rounded-xl text-slate-600 font-semibold hover:bg-slate-100 transition-colors"
+                  className="px-4 py-2 rounded-xl text-slate-500 font-bold text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors shadow-md"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs cursor-pointer"
                 >
                   Confirmar Aviso
                 </button>
@@ -1047,5 +1352,20 @@ export default function Home() {
         </div>
       )}
     </main>
+  );
+}
+
+// --- FINAL DEL ARCHIVO: EL WRAPPER QUE SOLUCIONA EL ERROR DE SUSPENSE ---
+export default function CartaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Cargando...
+        </div>
+      }
+    >
+      <CartaContent />
+    </Suspense>
   );
 }
