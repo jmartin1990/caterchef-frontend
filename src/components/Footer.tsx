@@ -238,7 +238,7 @@ export default function Footer() {
               />
             </div>
 
-            {/* --- ACTUALIZADO: 2. BIZUM ORIGINAL (Cargado directamente desde su CDN de accesibilidad oficial) --- */}
+            {/* 2. BIZUM ORIGINAL (Cargado directamente desde su CDN de accesibilidad oficial) --- */}
             <div
               className="h-7 w-12 bg-white rounded flex items-center justify-center px-1 shadow-sm select-none overflow-hidden"
               title="Bizum"
@@ -250,7 +250,7 @@ export default function Footer() {
               />
             </div>
 
-            {/* --- ACTUALIZADO: 3. AMERICAN EXPRESS ORIGINAL (Cargado desde la CDN oficial de American Express Blue Box) --- */}
+            {/*3. AMERICAN EXPRESS ORIGINAL (Cargado desde la CDN oficial de American Express Blue Box) --- */}
             <div
               className="h-7 w-12 bg-white rounded flex items-center justify-center px-0.0 shadow-sm select-none overflow-hidden"
               title="American Express"

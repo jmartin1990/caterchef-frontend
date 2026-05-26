@@ -1,15 +1,14 @@
-// src/app/carta/page.tsx
 "use client";
 
 import { useEffect, useState, SyntheticEvent, Suspense } from "react";
-import { useSearchParams } from "next/navigation"; // --- CONSUMO DE QUERY PARAMS ---
+import { useSearchParams } from "next/navigation"; //CONSUMO DE QUERY PARAMS
 import Link from "next/link";
-// --- CONSUMO DEL CONTEXTO DE SEGURIDAD (TFG: Control de Sesión Global) ---
+//CONSUMO DEL CONTEXTO DE SEGURIDAD
 import { useAuth } from "@/context/AuthContext";
-// --- CONSUMO DEL ESTADO REACTIVO DEL CARRITO GLOBAL (TFG: Persistencia Unificada) ---
+//CONSUMO DEL ESTADO REACTIVO DEL CARRITO GLOBAL
 import { useCart, Plato } from "@/context/CartContext";
 
-// --- MAPEO DE DISTRITOS DE REPARTO OFICIALES DE LA EMPRESA (TFG: Reglas de Negocio Dinámicas) ---
+//MAPEO DE DISTRITOS DE REPARTO OFICIALES DE LA EMPRESA
 const ZONAS_REPARTO: Record<string, string[]> = {
   Madrid: [
     "Arganzuela",
@@ -67,13 +66,13 @@ function CartaContent() {
   const [platos, setPlatos] = useState<Plato[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  // --- ESTADOS PARA EL SISTEMA DE DOBLE FILTRADO INTERACTIVO ---
+  //ESTADOS PARA EL SISTEMA DE DOBLE FILTRADO INTERACTIVO
   const [filtroCocina, setFiltroCocina] = useState<
     "fusion" | "peruana" | "espanola"
   >("fusion");
   const [categoriaActiva, setCategoriaActiva] = useState<string>("Todas");
 
-  // --- ESTADO DE CONTROL DE VOLUMEN (Max 30 por unidad) ---
+  // ESTADO DE CONTROL DE VOLUMEN (Max 30 por unidad)
   const [cantidadesPrevia, setCantidadesPrevia] = useState<
     Record<number, number>
   >({});
@@ -82,7 +81,7 @@ function CartaContent() {
   const [platoParaAviso, setPlatoParaAviso] = useState<Plato | null>(null);
   const [emailAviso, setEmailAviso] = useState("");
 
-  // --- INYECCIÓN DE OPERACIONES DEL CONTEXTO DEL CARRITO GLOBAL ---
+  // INYECCIÓN DE OPERACIONES DEL CONTEXTO DEL CARRITO GLOBAL
   const {
     carrito,
     agregarAlCarrito,
@@ -114,7 +113,7 @@ function CartaContent() {
     telefono: "",
   });
 
-  // --- ESTADOS COMPLEMENTARIOS PERFIL ---
+  // ESTADOS COMPLEMENTARIOS PERFIL
   const [perfilUsuario, setPerfilUsuario] = useState<{
     nombre: string;
     apellidos: string;
@@ -122,10 +121,10 @@ function CartaContent() {
     es_primera_compra: boolean;
   } | null>(null);
 
-  // --- ESTADO PARA BLOQUEO DE HORAS (Prevención de Concurrencia de Pedidos) ---
+  // ESTADO PARA BLOQUEO DE HORAS (Prevención de Concurrencia de Pedidos)
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
 
-  // --- DTO DE ENVÍO EXTENDIDO CON SOPORTE PARA INVITADOS (TFG: Normalización Estructurada) ---
+  // DTO DE ENVÍO EXTENDIDO CON SOPORTE PARA INVITADOS
   const [pedidoFormData, setPedidoFormData] = useState({
     tipo_servicio: "Catering Completo",
     fecha_servicio_dia: "",
@@ -142,12 +141,12 @@ function CartaContent() {
     email_invitado: "",
   });
 
-  // --- CÁLCULO DE MARGEN DE 24 HORAS PARA PREPARACIÓN (TFG: Logística) ---
+  // CÁLCULO DE MARGEN DE 24 HORAS PARA PREPARACIÓN
   const fechaActual = new Date();
   fechaActual.setDate(fechaActual.getDate() + 1); // Sumamos 1 día (24h) de margen obligatorio
   const fechaMinimaPermitida = fechaActual.toISOString().split("T")[0];
 
-  // --- EFECTO: Abre el carrito si detecta ?openCart=true en la URL ---
+  // EFECTO: Abre el carrito si detecta ?openCart=true en la URL
   useEffect(() => {
     const shouldOpen = searchParams.get("openCart");
     if (shouldOpen === "true") {
@@ -156,7 +155,7 @@ function CartaContent() {
     }
   }, [searchParams]);
 
-  // --- EFECTO: CARGAR PERFIL ACTIVO CON LOCALHOST (Previene errores de CORS) ---
+  // EFECTO: CARGAR PERFIL ACTIVO CON LOCALHOST (Previene errores de CORS)
   useEffect(() => {
     if (token) {
       fetch("http://localhost:8000/api/me", {
@@ -174,7 +173,7 @@ function CartaContent() {
     }
   }, [token]);
 
-  // --- EFECTO: SINCRONIZACIÓN REACTIVA DE DISTRITOS ---
+  // EFECTO: SINCRONIZACIÓN REACTIVA DE DISTRITOS
   useEffect(() => {
     const ciudadActual = pedidoFormData.ciudad;
     setPedidoFormData((prev) => ({
@@ -184,7 +183,7 @@ function CartaContent() {
     }));
   }, [pedidoFormData.ciudad]);
 
-  // --- EFECTO: CONSULTA DE HORARIOS OCUPADOS AL SELECCIONAR UNA FECHA ---
+  // EFECTO: CONSULTA DE HORARIOS OCUPADOS AL SELECCIONAR UNA FECHA
   useEffect(() => {
     if (pedidoFormData.fecha_servicio_dia) {
       fetch(
@@ -211,7 +210,7 @@ function CartaContent() {
     }
   }, [pedidoFormData.fecha_servicio_dia, pedidoFormData.fecha_servicio_hora]);
 
-  // --- EFECTO: CONTROL DE CESTA VACÍA ---
+  // EFECTO: CONTROL DE CESTA VACÍA
   useEffect(() => {
     if (carrito.length === 0) {
       setMostrarCarrito(false);
@@ -219,7 +218,7 @@ function CartaContent() {
     }
   }, [carrito.length]);
 
-  // --- EFECTO: CARGA INICIAL DESDE FASTAPI CON LOCALHOST ---
+  // EFECTO: CARGA INICIAL DESDE FASTAPI CON LOCALHOST
   useEffect(() => {
     const obtenerPlatos = async () => {
       try {
@@ -235,7 +234,7 @@ function CartaContent() {
     obtenerPlatos();
   }, []);
 
-  // --- EVALUACIÓN DEL DOBLE FILTRO EN CALIENTE ---
+  // EVALUACIÓN DEL DOBLE FILTRO EN CALIENTE
   const platosFiltrados = platos.filter((plato) => {
     let cumpleCocina = false;
     if (filtroCocina === "fusion")
@@ -461,7 +460,7 @@ function CartaContent() {
     }
   };
 
-  // --- CÓMPUTOS DERIVADOS ---
+  // CÓMPUTOS DERIVADOS
   const aplicaDescuento = estaLogueado && perfilUsuario?.es_primera_compra;
   const descuentoFidelidad = aplicaDescuento ? totalPrecioBase * 0.05 : 0;
   const subtotalConDescuento = totalPrecioBase - descuentoFidelidad;
@@ -730,7 +729,7 @@ function CartaContent() {
         </button>
       )}
 
-      {/* --- MODAL DEL CARRITO MULTIPASO --- */}
+      {/* MODAL DEL CARRITO MULTIPASO*/}
       {mostrarCarrito && (
         <div className="fixed inset-0 bg-black/60 flex items-start md:items-center justify-center p-4 z-60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-3xl p-6 md:p-8 max-w-full sm:max-w-lg md:max-w-2xl w-full shadow-2xl mt-20 mb-6 md:my-8 flex flex-col relative animate-fade-in">
@@ -810,7 +809,7 @@ function CartaContent() {
               ) : (
                 /* PASO 2: DATOS DE ENTREGA */
                 <form onSubmit={manejarSubmitPedido} className="space-y-4 pt-2">
-                  {/* --- NUEVO: RESUMEN DE PEDIDO FINANCIERO (VISIBLE EN PASO 2) --- */}
+                  {/* RESUMEN DE PEDIDO FINANCIERO*/}
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2 text-xs text-slate-600 mb-6">
                     <div className="flex justify-between">
                       <span>Subtotal comida</span>

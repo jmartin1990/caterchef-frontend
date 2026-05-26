@@ -1,4 +1,3 @@
-// src/app/admin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-// Definimos la estructura de los pedidos que viene de Neon DB (Existente)
+// Definimos la estructura de los pedidos que viene de Neon DB
 interface Pedido {
   id: number;
   usuario_id: number | null;
@@ -22,7 +21,7 @@ interface Pedido {
   creado_en: string;
 }
 
-// --- NUEVA INTERFACE: Esquema riguroso de tipado para los leads del CRM de contacto ---
+// NUEVA INTERFACE: Esquema riguroso de tipado para los leads del CRM de contacto
 interface MensajeContacto {
   id: number;
   nombre: string;
@@ -44,7 +43,7 @@ export default function AdminDashboard() {
 
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
 
-  // --- NUEVOS ESTADOS: Control dinámico de navegación por pestañas y almacenamiento de leads ---
+  //Control dinámico de navegación por pestañas y almacenamiento de leads
   const [tabActiva, setTabActiva] = useState<"pedidos" | "mensajes">("pedidos");
   const [mensajes, setMensajes] = useState<MensajeContacto[]>([]);
 
@@ -62,7 +61,7 @@ export default function AdminDashboard() {
       return;
     }
 
-    // --- ACTUALIZADO: Consultas asíncronas en paralelo (Optimización para Neon DB) ---
+    //Consultas asíncronas en paralelo (Optimización para Neon DB) ---
     const obtenerDatosConsola = async () => {
       setErrorAcceso(null);
       try {
@@ -85,7 +84,7 @@ export default function AdminDashboard() {
 
         if (resPedidos.status === 403 || resContacto.status === 403) {
           setErrorAcceso(
-            "⛔ Acceso Denegado. Esta cuenta no tiene privilegios de Administrador.",
+            "Acceso Denegado. Esta cuenta no tiene privilegios de Administrador.",
           );
           return;
         }
@@ -108,7 +107,7 @@ export default function AdminDashboard() {
     obtenerDatosConsola();
   }, [token]);
 
-  // --- FUNCIÓN PARA MUTAR EL ESTADO DEL PEDIDO (Existente) ---
+  // FUNCIÓN PARA MUTAR EL ESTADO DEL PEDIDO
   const cambiarEstado = async (pedidoId: number, nuevoEstado: string) => {
     try {
       const res = await fetch(
@@ -137,7 +136,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // --- NUEVA FUNCIÓN: Actualización atómica y reactiva para archivar mensajes (CRM) ---
+  // Actualización atómica y reactiva para archivar mensajes (CRM)
   const marcarMensajeLeido = async (mensajeId: number) => {
     try {
       const res = await fetch(
@@ -163,7 +162,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // --- HELPER VISUAL PARA LOS ESTADOS (Existente) ---
+  // HELPER VISUAL PARA LOS ESTADOS
   const getColorEstado = (estado: string) => {
     switch (estado) {
       case "pendiente_pago":
@@ -179,7 +178,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // Cálculos de métricas para el Dashboard (Existentes)
+  // Cálculos de métricas para el Dashboard
   const ingresosTotales = pedidos.reduce((sum, p) => sum + Number(p.total), 0);
   const pedidosPendientes = pedidos.filter(
     (p) => p.estado === "pendiente_pago",
@@ -235,7 +234,7 @@ export default function AdminDashboard() {
           </Link>
         </header>
 
-        {/* Bloque de Métricas Operativas Globales (Existente) */}
+        {/* Bloque de Métricas Operativas Globales*/}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
             <div className="bg-blue-100 p-4 rounded-xl text-blue-600 text-2xl">
@@ -278,7 +277,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* --- NUEVO: SISTEMA DE PESTAÑAS (TABS) PARA LA SEGMENTACIÓN DE MÓDULOS --- */}
+        {/* SISTEMA DE PESTAÑAS (TABS) PARA LA SEGMENTACIÓN DE MÓDULOS */}
         <div className="flex border-b border-slate-200 mb-8 gap-6">
           <button
             onClick={() => setTabActiva("pedidos")}

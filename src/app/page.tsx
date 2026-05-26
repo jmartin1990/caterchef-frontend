@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// --- CONFIGURACIÓN MÁSTER DEL CARRUSEL HERO (TFG: Arquitectura de Datos de Interfaz) ---
+// --- CONFIGURACIÓN MÁSTER DEL CARRUSEL HERO
 const SLIDES_HERO = [
   {
     id: 1,
@@ -14,7 +14,7 @@ const SLIDES_HERO = [
       "Explora una propuesta gastronómica única que fusiona las raíces tradicionales españolas con la explosión de sabor de la cocina peruana contemporánea.",
     botonTexto: "Ver la Carta",
     ruta: "/carta",
-    // --- ACTUALIZADO: Inyección del recurso local optimizado para mejorar el LCP (Largest Contentful Paint) ---
+    // Inyección del recurso local optimizado para mejorar el LCP (Largest Contentful Paint) ---
     imagenUrl: "/images/mesa-banquete-fusion.png",
   },
   {
@@ -100,7 +100,7 @@ export default function HomePage() {
           </div>
         ))}
 
-        {/* --- NAVEGACIÓN MANUAL POR FLECHAS LATERALES SEMITRANSPARENTES (TFG: Control Ergonómico UX) --- */}
+        {/* --- NAVEGACIÓN MANUAL POR FLECHAS LATERALES SEMITRANSPARENTES */}
         {/* Flecha Izquierda: Retroceder slide */}
         <button
           type="button"

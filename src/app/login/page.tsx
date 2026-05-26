@@ -10,7 +10,7 @@ export default function LoginPage() {
   const { iniciarSesion } = useAuth();
   const router = useRouter();
 
-  // --- ACTUALIZADO: Ampliamos los estados de vista para soportar la recuperación de credenciales (TFG) ---
+  // Ampliamos los estados de vista para soportar la recuperación de credenciales
   const [vista, setVista] = useState<"login" | "registro" | "recuperar">(
     "login",
   );
@@ -30,7 +30,7 @@ export default function LoginPage() {
     setCargando(true);
 
     try {
-      // --- NUEVO: FLUJO DE RECUPERACIÓN DE CONTRASEÑA (TFG: Opción 5 - Simulación SMTP Consola) ---
+      // --- NUEVO: FLUJO DE RECUPERACIÓN DE CONTRASEÑA
       if (vista === "recuperar") {
         const respuesta = await fetch(
           "http://127.0.0.1:8000/api/recuperar-password",
@@ -236,7 +236,7 @@ export default function LoginPage() {
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 outline-none focus:ring-2 focus:ring-amber-500 text-sm font-medium"
               />
 
-              {/* --- NUEVO: Enlace interactivo "¿Olvidaste tu contraseña?" (UX Gourmet) --- */}
+              {/* --- Enlace interactivo "¿Olvidaste tu contraseña?" (UX Gourmet) --- */}
               {vista === "login" && (
                 <div className="text-right mt-2.5">
                   <button

@@ -48,7 +48,7 @@ export default function PerfilLayout({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
       {/* --- CABECERA MÓVIL/TABLET: CORRECCIÓN DE POSICIÓN STICKY --- */}
-      {/* MODIFICADO: Cambiado 'top-16' a 'top-20' (80px) para sincronizarse perfectamente con la 
+      {/* Cambiado 'top-16' a 'top-20' (80px) para sincronizarse perfectamente con la 
         altura real del Navbar principal de CaterChef y evitar que se pise o recorte al hacer scroll.
       */}
       <div className="w-full bg-white border-b border-slate-200 md:hidden flex flex-col shadow-sm sticky top-20 z-30">
