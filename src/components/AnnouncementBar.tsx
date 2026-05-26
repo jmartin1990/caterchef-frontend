@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const ANUNCIOS = [
-  "🚚 Entrega en 24/48 horas (laborables de lunes a viernes)",
-  "✨ Envíos por 4,90€ a Madrid y Toledo. ¡GRATIS en compras superiores a 80€!",
+  "Entrega en 24/48 horas (laborables de lunes a viernes)",
+  "Envíos por 4,90€ a Madrid y Toledo. ¡GRATIS en compras superiores a 80€!",
 ];
 
 export default function AnnouncementBar() {

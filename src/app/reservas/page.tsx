@@ -19,7 +19,7 @@ export default function ReservasPage() {
     comensales: "2",
   });
 
-  // --- NUEVO: COMENTARIO TFG (ESTRUCTURA DE TARIFAS Y DATOS DE CHEFS DE CONTROL) ---
+  // ESTRUCTURA DE TARIFAS Y DATOS DE CHEFS DE CONTROL
   // Estructura de metadatos estáticos para el cálculo dinámico de costes en el cliente
   const experienciasCulinarias = [
     {
@@ -48,7 +48,7 @@ export default function ReservasPage() {
     },
   ];
 
-  // --- NUEVO: CÁLCULO DINÁMICO DE RANGO DE PRECIO EN CALIENTE ---
+  // CÁLCULO DINÁMICO DE RANGO DE PRECIO EN CALIENTE ---
   const numComensales = parseInt(formData.comensales, 10) || 1;
   const experienciaSeleccionada = experienciasCulinarias.find(
     (exp) => exp.id === formData.tipoChef,

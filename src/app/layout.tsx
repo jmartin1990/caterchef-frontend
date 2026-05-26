@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-// --- ACTUALIZADO: IMPORTACIONES DE ESTRUCTURA GLOBAL (TFG: Patrón de Layouts y Composición) ---
+// IMPORTACIONES DE ESTRUCTURA GLOBAL
 import { AuthProvider } from "@/context/AuthContext";
-// NUEVO: Importación del proveedor de estado global del carrito
+// Importación del proveedor de estado global del carrito
 import { CartProvider } from "@/context/CartContext";
-// 👈 NUEVO: Importación de la barra de anuncios superior interactiva
+//Importación de la barra de anuncios superior interactiva
 import AnnouncementBar from "@/components/AnnouncementBar";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -41,9 +41,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {/* --- PROVEEDOR DE ESTADO GLOBAL (JWT) --- */}
         <AuthProvider>
-          {/* --- NUEVO: PROVEEDOR DEL CARRITO GLOBAL (TFG: Anidamiento Jerárquico de Estados) --- */}
+          {/* PROVEEDOR DEL CARRITO GLOBAL */}
           <CartProvider>
-            {/* 👈 NUEVO: BARRA DE ANUNCIOS SUPERIOR --- */}
+            {/* BARRA DE ANUNCIOS SUPERIOR --- */}
             {/* Se posiciona arriba del todo del DOM dentro del body para que sea el primer elemento 
                 visual visible y cliqueable de la interfaz en cualquier ruta. */}
             <AnnouncementBar />
