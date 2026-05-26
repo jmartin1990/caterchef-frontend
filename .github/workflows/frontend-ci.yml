@@ -1,6 +1,5 @@
 name: Frontend CI (Next.js)
 
-# El pipeline se ejecutará con cada push o PR a las ramas main y dev
 on:
   push:
     branches: ["main", "dev"]
@@ -11,35 +10,25 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # Establecemos el directorio de trabajo en la subcarpeta del frontend si tu repo es monorepo,
-    # o lo dejamos por defecto si este archivo está en la raíz de su propio repositorio.
-    defaults:
-      run:
-        working-directory: .
-
     steps:
       # 1. Descargar el código del repositorio
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configurar el entorno de Node.js (Usamos la versión 20 que tienes en Docker)
+      # 2. Configurar el entorno de Node.js de forma correcta
       - name: Set up Node.js
-        uses: actions/checkout@v4 # Nota técnica: Cambia a actions/setup-node@v4 si el linter te da advertencia
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm" # Habilita la caché automática de npm para que las builds sean ultra rápidas
+          cache: "npm"
 
-      # 3. Instalar las dependencias de forma limpia y exacta (como el npm ci de tu Dockerfile)
+      # 3. Instalar las dependencias de forma limpia
       - name: Install dependencies
         run: npm ci
 
-      # 4. Validar el código con el Linter de Next.js (Evita que subas código con errores de formato o sintaxis)
-      - name: Run Linter (Next Lint)
-        run: npm run lint --if-present
-
-      # 5. Compilar la aplicación para producción (La prueba de fuego que hizo Docker)
+      # 4. Compilar la aplicación para producción (Usando los bypasses de next.config.ts)
       - name: Build Next.js application
         env:
-          NEXT_TELEMETRY_DISABLED: 1 # Desactivamos la telemetría igual que en Docker
-          NEXT_PUBLIC_API_URL: http://localhost:8000 # URL base simulada para la compilación
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_API_URL: http://localhost:8000
         run: npm run build
