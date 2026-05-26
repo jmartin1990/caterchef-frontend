@@ -21,10 +21,11 @@ export default function ContactoPage() {
     mensaje: "",
   });
 
-  const manejarSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
+  // --- ACTUALIZADO: Manejador asíncrono con inyección de conformidad RGPD ---
+  const manejarSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Freno de seguridad obligatorio si no se acepta la privacidad
+    // Freno de seguridad obligatorio si no se acepta la privacidad (Garantía de Compliance RGPD)
     if (!aceptaPrivacidad) {
       alert(
         "Por favor, debe aceptar la Política de Privacidad corporativa para procesar su solicitud.",
@@ -34,25 +35,60 @@ export default function ContactoPage() {
 
     setCargando(true);
 
-    // --- MODO AUDITORÍA TFG: Simulación interactiva de recepción de leads ---
-    setTimeout(() => {
-      alert(
-        `✨ ¡Formulario Procesado! Lead indexado con éxito. Gracias por contactar con CaterChef Fusión, ${formData.nombre}.`,
-      );
-
-      // Limpieza completa del formulario incluyendo los nuevos campos
-      setFormData({
-        nombre: "",
-        email: "",
-        telefono: "",
-        numero_pedido: "",
-        tipo_evento: "Particular / Privado",
-        mensaje: "",
+    try {
+      // --- CONSUMO DE API RESTFUL EN ENTORNO LOCAL ---
+      const respuesta = await fetch("http://127.0.0.1:8000/api/contacto", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // --- MODIFICADO: Combinación estructurada del DTO e inyección de banderas booleanas ---
+        body: JSON.stringify({
+          ...formData,
+          acepta_privacidad: aceptaPrivacidad, // Sincroniza el estado obligatorio de los términos legales
+          acepta_comerciales: aceptaComerciales, // Sincroniza el estado opcional de la casilla de marketing
+        }),
       });
-      setAceptaPrivacidad(false);
-      setAceptaComerciales(false);
+
+      // Verificación atómica del estatus de la respuesta de red (Estatus 201 Created esperado)
+      if (respuesta.ok) {
+        const datosServidor = await respuesta.json();
+
+        alert(
+          `✨ ¡Formulario Procesado! Lead indexado con éxito en Neon DB (Ticket ID: #${datosServidor.ticket_id}). Gracias por contactar con CaterChef Fusión, ${formData.nombre}.`,
+        );
+
+        // Reset completo de estados de la interfaz tras la persistencia exitosa en el servidor
+        setFormData({
+          nombre: "",
+          email: "",
+          telefono: "",
+          numero_pedido: "",
+          tipo_evento: "Particular / Privado",
+          mensaje: "",
+        });
+        setAceptaPrivacidad(false);
+        setAceptaComerciales(false);
+      } else {
+        // Captura de errores controlados devueltos por las validaciones de Pydantic
+        const errorDatos = await respuesta.json();
+        alert(
+          `Error en el servidor: ${errorDatos.detail || "No se pudo procesar la solicitud."}`,
+        );
+      }
+    } catch (error) {
+      // Control de excepciones de infraestructura (Servidor Backend caído o fallos de red)
+      console.error(
+        "Fallo crítico en conexión Axios/Fetch hacia endpoint de contacto:",
+        error,
+      );
+      alert(
+        "Error de conexión con el servidor. Asegúrese de tener el servicio backend activo.",
+      );
+    } finally {
+      // Aseguramos la liberación del spinner tanto si la transacción es exitosa como si falla
       setCargando(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -257,8 +293,8 @@ export default function ContactoPage() {
                     htmlFor="comercial_contacto"
                     className="text-xs text-slate-500 select-none cursor-pointer leading-snug"
                   >
-                    [Opcional] Acepto el envío de comunicaciones comerciales y
-                    newsletters de alta cocina.
+                    [Opcional] Acepto el envío de comunicaciones comerciales,
+                    códigos promocionales y newsletters.
                   </label>
                 </div>
               </div>
@@ -314,12 +350,11 @@ export default function ContactoPage() {
             </div>
 
             {/* Bloque de Coordenadas Físicas de Marca */}
-            <div className="bg-slate-950 text-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-900 relative overflow-hidden flex-grow flex flex-col justify-center">
+            <div className="bg-slate-950 text-white p-8 md:p-10 rounded-3xl shadow-xl border border-slate-900 relative overflow-hidden grow flex flex-col justify-center">
               <div className="absolute top-0 right-0 p-8 text-7xl opacity-10 pointer-events-none select-none font-black">
                 C.F
               </div>
 
-              {/* --- MODIFICADO: Cambiado el string 'Oficinas Centrales' por la variable unificada de marca --- */}
               <span className="text-amber-500 font-bold tracking-[0.2em] uppercase text-[10px] mb-6 block">
                 Otras formas de contacto
               </span>
@@ -343,7 +378,6 @@ export default function ContactoPage() {
                     <h4 className="font-bold text-slate-200">
                       Línea de Reservas Directa
                     </h4>
-                    {/* --- MODIFICADO: Añadido tag 'a' clicable nativo y sincronizado al número oficial --- */}
                     <a
                       href="tel:+34914356621"
                       className="text-slate-400 text-xs mt-1 font-mono hover:text-amber-500 transition-colors block"
@@ -359,10 +393,9 @@ export default function ContactoPage() {
                     <h4 className="font-bold text-slate-200">
                       Atención Institucional
                     </h4>
-                    {/* --- MODIFICADO: Añadido tag 'a' con trigger 'mailto:' apuntando al correo unificado --- */}
                     <a
                       href="mailto:atencionalcliente@caterchef.com"
-                      className="text-slate-400 text-xs mt-1 font-mono hover:text-amber-500 transition-colors block truncate max-w-[200px] sm:max-w-none"
+                      className="text-slate-400 text-xs mt-1 font-mono hover:text-amber-500 transition-colors block truncate max-w-50 sm:max-w-none"
                     >
                       atencionalcliente@caterchef.com
                     </a>
@@ -372,7 +405,6 @@ export default function ContactoPage() {
 
               {/* Canales de Redes Sociales Corporativas */}
               <div className="border-t border-slate-800 mt-8 pt-6">
-                {/* --- MODIFICADO: Cambiado el encabezado por 'Redes sociales' --- */}
                 <h4 className="font-bold text-amber-500 uppercase tracking-wider text-[11px] mb-4">
                   Redes sociales
                 </h4>
@@ -396,7 +428,6 @@ export default function ContactoPage() {
                     href="#"
                     className="flex items-center gap-2.5 p-2.5 bg-slate-900 border border-slate-800 rounded-xl hover:text-white hover:border-cyan-400/40 transition-all text-xs font-bold text-slate-400"
                   >
-                    {/* --- CORREGIDO: Inyectado el path inline SVG genuino y oficial de la marca TikTok --- */}
                     <svg
                       className="w-4 h-4 fill-current text-cyan-400"
                       viewBox="0 0 24 24"

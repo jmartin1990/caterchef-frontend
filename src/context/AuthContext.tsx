@@ -24,11 +24,34 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
 
-  // Al cargar la web, miramos si ya teníamos un token guardado (persistencia de sesión)
+  // --- ACTUALIZADO: Validación activa de "Token Fantasma" (Seguridad TFG) ---
+  // Al cargar la web, miramos si hay token y verificamos su validez con FastAPI
   useEffect(() => {
     const tokenGuardado = localStorage.getItem("token_caterchef");
+
     if (tokenGuardado) {
-      setToken(tokenGuardado);
+      // Hacemos una petición silenciosa para validar la firma del JWT
+      fetch("http://localhost:8000/api/me", {
+        headers: { Authorization: `Bearer ${tokenGuardado}` },
+      })
+        .then((res) => {
+          if (res.ok) {
+            // El servidor confirma que el token está vivo
+            setToken(tokenGuardado);
+          } else {
+            // El token ha caducado o es inválido (Error 401 Unauthorized)
+            console.warn(
+              "🛡️ Sesión caducada o inválida: Limpiando token fantasma.",
+            );
+            localStorage.removeItem("token_caterchef");
+            setToken(null);
+          }
+        })
+        .catch((err) => {
+          // Si el backend está apagado, mantenemos el token por tolerancia a fallos de red
+          console.error("Error de red al validar la sesión:", err);
+          setToken(tokenGuardado);
+        });
     }
   }, []);
 
@@ -38,13 +61,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(nuevoToken);
   };
 
-  // Función para borrar el token (Logout)
+  // Función para borrar el token (Logout manual o programado)
   const cerrarSesion = () => {
     localStorage.removeItem("token_caterchef");
     setToken(null);
   };
 
-  // Variable derivada: Si hay token, está logueado. Si no, no.
+  // Variable derivada: Si el estado de React tiene token, es una sesión válida comprobada
   const estaLogueado = !!token;
 
   return (

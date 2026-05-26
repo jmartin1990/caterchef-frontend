@@ -69,6 +69,14 @@ export default function Footer() {
             </li>
             <li>
               <Link
+                href="/envios-y-devoluciones"
+                className="hover:text-amber-500 transition-colors"
+              >
+                Envíos y Devoluciones
+              </Link>
+            </li>
+            <li>
+              <Link
                 href="/contacto"
                 className="hover:text-amber-500 transition-colors"
               >
@@ -109,7 +117,7 @@ export default function Footer() {
               ✉️{" "}
               <a
                 href="mailto:atencionalcliente@caterchef.com"
-                className="text-slate-300 font-mono hover:text-amber-500 transition-colors block truncate max-w-[190px] xl:max-w-none"
+                className="text-slate-300 font-mono hover:text-amber-500 transition-colors block truncate max-w-47.5 xl:max-w-none"
               >
                 atencionalcliente@caterchef.com
               </a>
@@ -129,7 +137,7 @@ export default function Footer() {
             {/* Instagram */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] text-white flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 text-white flex items-center justify-center transition-colors shadow-inner"
               aria-label="Instagram"
             >
               <svg
@@ -143,7 +151,7 @@ export default function Footer() {
             {/* TikTok */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 flex items-center justify-center transition-colors shadow-inner"
               aria-label="TikTok"
             >
               <svg
@@ -157,7 +165,7 @@ export default function Footer() {
             {/* YouTube */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] text-white flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 text-white flex items-center justify-center transition-colors shadow-inner"
               aria-label="YouTube"
             >
               <svg
@@ -171,7 +179,7 @@ export default function Footer() {
             {/* Twitter / X */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 flex items-center justify-center transition-colors shadow-inner"
               aria-label="Twitter"
             >
               <svg
@@ -185,7 +193,7 @@ export default function Footer() {
             {/* LinkedIn */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 flex items-center justify-center transition-colors shadow-inner"
               aria-label="LinkedIn"
             >
               <svg
@@ -199,7 +207,7 @@ export default function Footer() {
             {/* Facebook */}
             <a
               href="#"
-              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-[var(--color-amber-600)] flex items-center justify-center transition-colors shadow-inner"
+              className="w-10 h-10 rounded-full bg-slate-900 hover:bg-amber-600 flex items-center justify-center transition-colors shadow-inner"
               aria-label="Facebook"
             >
               <svg

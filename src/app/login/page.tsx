@@ -74,7 +74,7 @@ export default function LoginPage() {
           const datos = await respuesta.json();
           iniciarSesion(datos.access_token);
           alert("¡Cuenta creada! Se ha aplicado tu 5% de descuento.");
-          router.push("/");
+          router.back(); // Esto te devolverá a la página donde estabas antes del login
         } else {
           const error = await respuesta.json();
           alert(`Error: ${error.detail}`);
@@ -94,7 +94,7 @@ export default function LoginPage() {
         if (respuesta.ok) {
           const datos = await respuesta.json();
           iniciarSesion(datos.access_token);
-          router.push("/");
+          router.back(); // Esto te devolverá a la página donde estabas antes del login
         } else {
           alert("Credenciales incorrectas.");
         }

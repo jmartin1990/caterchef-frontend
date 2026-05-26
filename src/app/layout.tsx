@@ -4,9 +4,12 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 // --- ACTUALIZADO: IMPORTACIONES DE ESTRUCTURA GLOBAL (TFG: Patrón de Layouts y Composición) ---
-// Importamos el AuthProvider, el Navbar y el Footer para definir el marco envolvente persistente de la app.
 import { AuthProvider } from "@/context/AuthContext";
-import Navbar from "@/components/Navbar"; // <-- NUEVO: Importación del componente de navegación interactiva
+// NUEVO: Importación del proveedor de estado global del carrito
+import { CartProvider } from "@/context/CartContext";
+// 👈 NUEVO: Importación de la barra de anuncios superior interactiva
+import AnnouncementBar from "@/components/AnnouncementBar";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 const geistSans = Geist({
@@ -22,7 +25,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CaterChef Fusión",
   description:
-    "Plataforma de gestión de catering y experiencias de chef privado",
+    "Plataforma de gestión de catering y experiences de chef privado",
 };
 
 export default function RootLayout({
@@ -38,20 +41,27 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {/* --- PROVEEDOR DE ESTADO GLOBAL (JWT) --- */}
         <AuthProvider>
-          {/* --- NUEVO: NAVBAR GLOBAL --- */}
-          {/* Al posicionarse aquí, la barra de navegación superior estará presente en todas las rutas 
-              y tendrá acceso inmediato al estado de autenticación (useAuth) */}
-          <Navbar />
+          {/* --- NUEVO: PROVEEDOR DEL CARRITO GLOBAL (TFG: Anidamiento Jerárquico de Estados) --- */}
+          <CartProvider>
+            {/* 👈 NUEVO: BARRA DE ANUNCIOS SUPERIOR --- */}
+            {/* Se posiciona arriba del todo del DOM dentro del body para que sea el primer elemento 
+                visual visible y cliqueable de la interfaz en cualquier ruta. */}
+            <AnnouncementBar />
 
-          {/* --- NUEVO: CONTENEDOR DE ENRUTAMIENTO DINÁMICO --- */}
-          {/* Envolvemos {children} en una etiqueta semántica 'main' con 'flex-grow'. 
-              Esto asegura que si una vista (ej. Login) tiene poco contenido, el Footer no flote, 
-              sino que sea empujado hacia la parte inferior de la pantalla de forma profesional. */}
-          <main className="flex-grow">{children}</main>
+            {/* --- NAVBAR GLOBAL --- */}
+            {/* Posicionado de forma que consuma de manera reactiva tanto las credenciales (useAuth) 
+                como el contador dinámico de artículos (useCart) */}
+            <Navbar />
 
-          {/* --- FOOTER GLOBAL --- */}
-          {/* Se mantiene persistente abajo del todo en la jerarquía del DOM */}
-          <Footer />
+            {/* --- CONTENEDOR DE ENRUTAMIENTO DINÁMICO --- */}
+            {/* Envolvemos {children} en una etiqueta semántica 'main' con 'flex-grow'. 
+                Esto asegura que si una vista tiene poco contenido, el Footer no flote, 
+                sino que sea empujado hacia la parte inferior de la pantalla de forma profesional. */}
+            <main className="grow">{children}</main>
+
+            {/* --- FOOTER GLOBAL --- */}
+            <Footer />
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
