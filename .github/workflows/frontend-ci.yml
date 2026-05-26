@@ -1,0 +1,34 @@
+name: Frontend CI (Next.js)
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configurar el entorno de Node.js de forma correcta
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # 3. Instalar las dependencias de forma limpia
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Compilar la aplicación para producción (Usando los bypasses de next.config.ts)
+      - name: Build Next.js application
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: npm run build
