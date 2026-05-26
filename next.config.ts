@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
-// Cambiamos el tipo para permitir las opciones extra de eslint y typescript
-const nextConfig: any = {
+// Definimos una interfaz que extiende la configuración original de Next
+interface CustomNextConfig extends NextConfig {
+  eslint?: {
+    ignoreDuringBuilds?: boolean;
+  };
+  typescript?: {
+    ignoreBuildErrors?: boolean;
+  };
+}
+
+const nextConfig: CustomNextConfig = {
   /* config options here */
   eslint: {
     ignoreDuringBuilds: true,
